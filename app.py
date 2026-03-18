@@ -178,7 +178,7 @@ with tab2:
     st.header("Prompt")
 
     uploaded_split_csv = st.file_uploader(
-        "Nahraj produktové split CSV",
+        "Nahraj produktové split CSV  - soubor co jsi vygeneroval v předchozím kroku - v záložce Scraper",
         type=["csv"],
         key="prompt_uploaded_csv",
     )
@@ -329,13 +329,13 @@ with tab3:
     )
 
     uploaded_product_csv = st.file_uploader(
-        "Nahraj produktové split CSV",
+        "Nahraj produktové split CSV - první soubor co jsi vygeneroval v záložce Scraper",
         type=["csv"],
         key="fill_uploaded_csv",
     )
 
     uploaded_prompt_docx = st.file_uploader(
-        "Nahraj vystup_prompt.docx",
+        "Nahraj vystup_prompt.docx - soubor co jsi vygeneroval v záložce Prompt",
         type=["docx"],
         key="fill_uploaded_prompt_docx",
     )
