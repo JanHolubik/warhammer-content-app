@@ -96,6 +96,8 @@ def get_template_paths(template_dir: Path, template_type: str) -> Dict[str, Path
 def normalize_docx_text(text: str) -> str:
     return (
         str(text)
+        .replace("\ufeff", "")
+        .replace("\u200b", "")
         .replace("\xa0", " ")
         .replace("\u202f", " ")
         .replace("\r\n", "\n")
@@ -158,30 +160,40 @@ def extract_placeholders(template_text: str) -> List[str]:
 
 def parse_key_value_block(text: str) -> Dict[str, str]:
     text = normalize_docx_text(text).strip()
-    matches = list(re.finditer(r"(?m)^([^:\n]+):\s*(.*)$", text))
+    lines = text.split("\n")
 
     result: Dict[str, str] = {}
+    current_key: Optional[str] = None
+    current_value_lines: List[str] = []
 
-    for i, match in enumerate(matches):
-        key_raw = match.group(1).strip()
-        key = canonical_key(key_raw)
-        inline_value = match.group(2).strip()
+    for raw_line in lines:
+        line = normalize_docx_text(raw_line).strip()
 
-        start = match.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        block_value = text[start:end].strip()
+        if not line:
+            if current_key is not None:
+                current_value_lines.append("")
+            continue
 
-        if inline_value and block_value:
-            value = f"{inline_value}\n{block_value}".strip()
-        elif inline_value:
-            value = inline_value
-        else:
-            value = block_value
+        if ":" in line:
+            possible_key, possible_value = line.split(":", 1)
+            possible_key_clean = canonical_key(possible_key)
 
-        result[key] = normalize_docx_text(value.strip())
+            # nový klíč jen pokud vlevo opravdu něco rozumného je
+            if possible_key_clean:
+                if current_key is not None:
+                    result[current_key] = normalize_docx_text("\n".join(current_value_lines).strip())
+
+                current_key = possible_key_clean
+                current_value_lines = [possible_value.strip()] if possible_value.strip() else []
+                continue
+
+        if current_key is not None:
+            current_value_lines.append(line)
+
+    if current_key is not None:
+        result[current_key] = normalize_docx_text("\n".join(current_value_lines).strip())
 
     return result
-
 
 def parse_prompt_output_by_lang(text: str) -> Dict[str, Dict[str, str]]:
     text = normalize_docx_text(text).strip()

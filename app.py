@@ -32,7 +32,10 @@ def save_uploaded_file_to_temp(uploaded_file, suffix: str) -> str:
 
 def make_docx_bytes(text: str) -> bytes:
     doc = Document()
-    doc.add_paragraph(text)
+
+    for line in text.splitlines():
+        doc.add_paragraph(line)
+
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
