@@ -649,6 +649,19 @@ def run_filler(
     prompt_output_text = read_docx_text(prompt_output_docx_path)
     values_by_lang = parse_prompt_output_by_lang(prompt_output_text)
 
+    for lang in ("cs", "en", "sk"):
+        if "sekce_o_jednotce_nadpis" not in values_by_lang[lang] and "section_inside_title" in values_by_lang[lang]:
+            values_by_lang[lang]["sekce_o_jednotce_nadpis"] = values_by_lang[lang]["section_inside_title"]
+
+        if "sekce_o_jednotce_text" not in values_by_lang[lang] and "section_inside_text" in values_by_lang[lang]:
+            values_by_lang[lang]["sekce_o_jednotce_text"] = values_by_lang[lang]["section_inside_text"]
+
+    if "sekce_o_jednotce_nadpis" not in values_by_lang["cs"]:
+        raise ValueError(
+            "Parser nenačetl 'sekce_o_jednotce_nadpis'. "
+            f"Načtené CS klíče: {sorted(values_by_lang['cs'].keys())}"
+        )
+
     if debug:
         cs_keys = sorted(values_by_lang["cs"].keys())
         print("KEYS CS:", cs_keys)
