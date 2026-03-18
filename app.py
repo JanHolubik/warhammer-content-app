@@ -19,16 +19,22 @@ st.title("Warhammer Content App")
 
 st.markdown("""
 <style>
-/* Zvětšení tabů */
+/* celý tab button */
 button[data-baseweb="tab"] {
-    font-size: 20px !important;
-    padding: 12px 24px !important;
+    min-height: 60px !important;
+    padding: 10px 24px !important;
 }
 
-/* Zvýraznění aktivního tabu */
+/* text uvnitř tabu */
+button[data-baseweb="tab"] p {
+    font-size: 28px !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+}
+
+/* aktivní tab */
 button[data-baseweb="tab"][aria-selected="true"] {
-    font-weight: bold;
-    border-bottom: 3px solid #ff4b4b;
+    border-bottom: 4px solid #ff4b4b !important;
 }
 </style>
 """, unsafe_allow_html=True)
