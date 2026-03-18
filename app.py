@@ -1,7 +1,7 @@
 import tempfile
 from io import BytesIO
 from pathlib import Path
-
+import re
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -16,6 +16,22 @@ TEMPLATE_DIR_DEFAULT = "sablony"
 
 st.set_page_config(page_title="Warhammer Content App", layout="wide")
 st.title("Warhammer Content App")
+
+st.markdown("""
+<style>
+/* Zvětšení tabů */
+button[data-baseweb="tab"] {
+    font-size: 20px !important;
+    padding: 12px 24px !important;
+}
+
+/* Zvýraznění aktivního tabu */
+button[data-baseweb="tab"][aria-selected="true"] {
+    font-weight: bold;
+    border-bottom: 3px solid #ff4b4b;
+}
+</style>
+""", unsafe_allow_html=True)
 
 if "generated_prompt_text" not in st.session_state:
     st.session_state["generated_prompt_text"] = ""
@@ -69,11 +85,7 @@ with tab1:
         key="scraper_links_editor",
     )
 
-    template_dir = st.text_input(
-        "Složka se šablonami",
-        value=TEMPLATE_DIR_DEFAULT,
-        key="scraper_template_dir",
-    )
+    template_dir = TEMPLATE_DIR_DEFAULT
 
     split_by_type = st.checkbox(
         "Split podle typu produktu",
@@ -124,10 +136,18 @@ with tab1:
                 st.write("Počet produktů:", result["row_count"])
 
                 main_csv_bytes = Path(result["output_csv"]).read_bytes()
+
+                first_product_name = "shoptet_CREATE_CZ"
+                if result.get("rows"):
+                    first_product_name = result["rows"][0].get("name:cs", "") or "shoptet_CREATE_CZ"
+
+                safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", first_product_name)
+                file_name = f"{safe_name}_CREATE_CZ.csv"
+
                 st.download_button(
                     label="Stáhnout hlavní CSV",
                     data=main_csv_bytes,
-                    file_name="shoptet_CREATE_CZ.csv",
+                    file_name=file_name,
                     mime="text/csv",
                     key="download_main_scraper_csv",
                 )
@@ -314,11 +334,7 @@ with tab3:
         key="fill_uploaded_prompt_docx",
     )
 
-    template_dir = st.text_input(
-        "Složka se šablonami",
-        value=TEMPLATE_DIR_DEFAULT,
-        key="fill_template_dir",
-    )
+    template_dir = TEMPLATE_DIR_DEFAULT
 
     target_ean = st.text_input(
         "Cílový EAN (volitelné)",
