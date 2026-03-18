@@ -203,6 +203,23 @@ with tab2:
 
     st.subheader("Prompt šablony")
 
+    st.markdown("""
+    <div style="
+        background:#0f172a;
+        padding:16px 20px;
+        border-radius:12px;
+        border:1px solid #1e293b;
+        margin-bottom:16px;
+    ">
+    <b style="font-size:16px;">🧠 Prompt šablony</b><br>
+    <span style="color:#94a3b8;">
+    Vyber typ produktu a vygeneruj prompt pro AI.<br>
+    Prompt už automaticky obsahuje název produktu a EAN.<br>
+    Zkopíruj ho do AI, vygenerovaný output vlož níže a ulož jako <b>vystup_prompt.docx</b>.
+    </span>
+    </div>
+    """, unsafe_allow_html=True)
+
     col1, col2, col3, col4, col5 = st.columns(5)
 
     def generate_prompt(prompt_type: str) -> None:
