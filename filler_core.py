@@ -383,6 +383,11 @@ def apply_aliases(values: Dict[str, str], template_type: str) -> Dict[str, str]:
         for src, dst in mini_aliases.items():
             if src in out and dst not in out:
                 out[dst] = out[src]
+        if "section_inside_title" in out and "sekce_o_jednotce_nadpis" not in out:
+            out["sekce_o_jednotce_nadpis"] = out["section_inside_title"]
+
+        if "section_inside_text" in out and "sekce_o_jednotce_text" not in out:
+            out["sekce_o_jednotce_text"] = out["section_inside_text"]
 
     return out
 
@@ -645,6 +650,12 @@ def run_filler(
     values_by_lang = parse_prompt_output_by_lang(prompt_output_text)
 
     if debug:
+        cs_keys = sorted(values_by_lang["cs"].keys())
+        print("KEYS CS:", cs_keys)
+        print("VALUE sekce_o_jednotce_nadpis:", repr(values_by_lang["cs"].get("sekce_o_jednotce_nadpis")))
+        print("VALUE sekce_o_jednotce_text:", repr(values_by_lang["cs"].get("sekce_o_jednotce_text")))
+
+    if debug:
         print("PROMPT FILE:", prompt_output_docx_path)
         print("DETAIL FILE:", template_paths["detail_cs"])
         print()
@@ -677,6 +688,12 @@ def run_filler(
 
         print_placeholder_summary("KRÁTKÁ ŠABLONA CS", short_placeholders_cs, values_by_lang["cs"])
         print_placeholder_summary("DETAILNÍ ŠABLONA CS", detail_placeholders_cs, values_by_lang["cs"])
+    
+    if debug and "sekce_o_jednotce_nadpis" not in values_by_lang["cs"]:
+        raise ValueError(
+            "Parser nenačetl 'sekce_o_jednotce_nadpis'. "
+            f"Načtené CS klíče: {sorted(values_by_lang['cs'].keys())}"
+        )
 
     final_short_html_cs = flatten_html_for_csv(
         fill_template(short_template_cs, values_by_lang["cs"], strict=True)
