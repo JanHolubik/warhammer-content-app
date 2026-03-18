@@ -23,6 +23,14 @@ if "generated_prompt_text" not in st.session_state:
 if "generated_prompt_type" not in st.session_state:
     st.session_state["generated_prompt_type"] = ""
 
+if "filled_csv_bytes" not in st.session_state:
+    st.session_state["filled_csv_bytes"] = None
+
+if "create_csv_bytes" not in st.session_state:
+    st.session_state["create_csv_bytes"] = None
+
+if "fill_product_name" not in st.session_state:
+    st.session_state["fill_product_name"] = ""
 
 def save_uploaded_file_to_temp(uploaded_file, suffix: str) -> str:
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -372,21 +380,41 @@ with tab3:
                 filled_csv_bytes = Path(result["output_csv"]).read_bytes()
                 create_csv_bytes = Path(result["output_create_csv"]).read_bytes()
 
-                st.download_button(
-                    label="Stáhnout FILLED CSV",
-                    data=filled_csv_bytes,
-                    file_name="0_FILLED.csv",
-                    mime="text/csv",
-                    key="download_filled_csv",
-                )
+                st.session_state["filled_csv_bytes"] = filled_csv_bytes
+                st.session_state["create_csv_bytes"] = create_csv_bytes
+                st.session_state["fill_product_name"] = result["product_name"]
 
-                st.download_button(
-                    label="Stáhnout CREATE CSV",
-                    data=create_csv_bytes,
-                    file_name="0_CREATE.csv",
-                    mime="text/csv",
-                    key="download_create_csv",
-                )
+                st.success("Výstupy jsou připravené ke stažení níže.")
 
         except Exception as e:
             st.exception(e)
+
+    if st.session_state["filled_csv_bytes"] and st.session_state["create_csv_bytes"]:
+        st.subheader("Výstupy ke stažení")
+
+        if st.session_state["fill_product_name"]:
+            st.write("Produkt:", st.session_state["fill_product_name"])
+
+        st.download_button(
+            label="Stáhnout FILLED CSV",
+            data=st.session_state["filled_csv_bytes"],
+            file_name="0_FILLED.csv",
+            mime="text/csv",
+            key="download_filled_csv_persistent",
+        )
+
+        st.download_button(
+            label="Stáhnout CREATE CSV",
+            data=st.session_state["create_csv_bytes"],
+            file_name="0_CREATE.csv",
+            mime="text/csv",
+            key="download_create_csv_persistent",
+        )
+
+        if st.button("Vymazat výstupy", key="clear_fill_outputs"):
+            st.session_state["filled_csv_bytes"] = None
+            st.session_state["create_csv_bytes"] = None
+            st.session_state["fill_product_name"] = ""
+            st.rerun()
+
+       
