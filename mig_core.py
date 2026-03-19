@@ -30,6 +30,7 @@ def create_mig_card_row(
     price_without_vat = round(price / 1.21, 2)
     row = {
         "code": code,
+        "pairCode": "",
         "externalCode": code,
         "name": name,
         "ean": ean,
