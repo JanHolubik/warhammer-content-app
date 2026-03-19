@@ -15,7 +15,17 @@ PROMPT_TEMPLATE_DIR = Path("prompt_templates")
 TEMPLATE_DIR_DEFAULT = "sablony"
 
 st.set_page_config(page_title="Warhammer Content App", layout="wide")
-st.title("Warhammer Content App")
+engine = st.radio(
+    "Vyber engine",
+    ["Warhammer", "MIG / AMMO"],
+    horizontal=True,
+    key="main_engine_switch",
+)
+
+if engine == "Warhammer":
+    st.title("Warhammer Content App")
+else:
+    st.title("MIG / AMMO Content App")
 
 st.markdown("""
 <style>
@@ -71,389 +81,443 @@ def make_docx_bytes(text: str) -> bytes:
     buffer.seek(0)
     return buffer.getvalue()
 
-
-tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
-
-
-with tab1:
-    st.header("Scraper")
-    st.subheader("Odkazy k produktům")
-    st.caption("Do prvního sloupce vlož odkaz na produkt z Herního Prostoru, do druhého odpovídající odkaz z Games Workshopu. GW odkaz může zůstat prázdný.")
-
-    links_df = pd.DataFrame([
-        {"Herní Prostor URL": "", "Games Workshop URL": ""}
-    ])
-
-    edited_links_df = st.data_editor(
-        links_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="scraper_links_editor",
-    )
-
-    template_dir = TEMPLATE_DIR_DEFAULT
-
-    split_by_type = st.checkbox(
-        "Split podle typu produktu",
-        value=True,
-        key="scraper_split_by_type",
-    )
-
-    verbose_mode = st.checkbox(
-        "Verbose log",
-        value=True,
-        key="scraper_verbose_mode",
-    )
-
-    if st.button("Spustit scraper", key="scraper_run_button"):
-        try:
-            valid_links_df = edited_links_df.copy().fillna("")
-            valid_links_df = valid_links_df.rename(columns={
-                "Herní Prostor URL": "hp_url",
-                "Games Workshop URL": "gw_url",
-            })
-
-            valid_links_df["hp_url"] = valid_links_df["hp_url"].astype(str).str.strip()
-            valid_links_df["gw_url"] = valid_links_df["gw_url"].astype(str).str.strip()
-            valid_links_df = valid_links_df[valid_links_df["hp_url"] != ""]
-
-            if valid_links_df.empty:
-                st.error("Zadej alespoň jeden odkaz do sloupce Herní Prostor URL.")
-            else:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w", encoding="utf-8-sig") as tmp_links:
-                    valid_links_df.to_csv(tmp_links.name, sep=";", index=False)
-                    temp_links_path = tmp_links.name
-
-                temp_main_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-                temp_main_output.close()
-
-                temp_split_dir = tempfile.mkdtemp(prefix="warhammer_split_")
-
-                result = run_scraper(
-                    input_links=temp_links_path,
-                    output=temp_main_output.name,
-                    tpl_dir=template_dir,
-                    split_out_dir=temp_split_dir,
-                    split_by_type=split_by_type,
-                    verbose=verbose_mode,
-                )
-
-                st.success("Scraper proběhl úspěšně.")
-                st.write("Počet produktů:", result["row_count"])
-
-                main_csv_bytes = Path(result["output_csv"]).read_bytes()
-
-                first_product_name = "shoptet_CREATE_CZ"
-                if result.get("rows"):
-                    first_product_name = result["rows"][0].get("name:cs", "") or "shoptet_CREATE_CZ"
-
-                safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", first_product_name)
-                file_name = f"{safe_name}_CREATE_CZ.csv"
-
-                st.download_button(
-                    label="Stáhnout hlavní CSV",
-                    data=main_csv_bytes,
-                    file_name=file_name,
-                    mime="text/csv",
-                    key="download_main_scraper_csv",
-                )
-
-                if result["split_files"]:
-                    st.subheader("Vygenerované split CSV soubory")
-                    for file_path in result["split_files"][:50]:
-                        p = Path(file_path)
-                        st.download_button(
-                            label=f"Stáhnout {p.name}",
-                            data=p.read_bytes(),
-                            file_name=p.name,
-                            mime="text/csv",
-                            key=f"download_split_{p.name}",
-                        )
-
-        except Exception as e:
-            st.error(f"Chyba při scrapování: {e}")
+if engine == "Warhammer":
+    tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
 
 
-with tab2:
-    st.header("Prompt")
+    with tab1:
+        st.header("Scraper")
+        st.subheader("Odkazy k produktům")
+        st.caption("Do prvního sloupce vlož odkaz na produkt z Herního Prostoru, do druhého odpovídající odkaz z Games Workshopu. GW odkaz může zůstat prázdný.")
 
-    uploaded_split_csv = st.file_uploader(
-        "Nahraj produktové split CSV  - soubor co jsi vygeneroval v předchozím kroku - v záložce Scraper",
-        type=["csv"],
-        key="prompt_uploaded_csv",
-    )
+        links_df = pd.DataFrame([
+            {"Herní Prostor URL": "", "Games Workshop URL": ""}
+        ])
 
-    product_name = ""
-    product_ean = ""
+        edited_links_df = st.data_editor(
+            links_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="scraper_links_editor",
+        )
 
-    if uploaded_split_csv is not None:
-        try:
-            df_preview = pd.read_csv(uploaded_split_csv, sep=";", dtype=str).fillna("")
+        template_dir = TEMPLATE_DIR_DEFAULT
 
-            if not df_preview.empty:
-                name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
-                product_name = df_preview.iloc[0].get(name_col, "")
-                product_ean = df_preview.iloc[0].get("ean", "")
+        split_by_type = st.checkbox(
+            "Split podle typu produktu",
+            value=True,
+            key="scraper_split_by_type",
+        )
 
-                st.info(f"Produkt: {product_name}")
-                st.write(f"EAN: {product_ean}")
+        verbose_mode = st.checkbox(
+            "Verbose log",
+            value=True,
+            key="scraper_verbose_mode",
+        )
 
-        except Exception as e:
-            st.warning(f"Nepodařilo se načíst CSV: {e}")
+        if st.button("Spustit scraper", key="scraper_run_button"):
+            try:
+                valid_links_df = edited_links_df.copy().fillna("")
+                valid_links_df = valid_links_df.rename(columns={
+                    "Herní Prostor URL": "hp_url",
+                    "Games Workshop URL": "gw_url",
+                })
 
-    st.subheader("Prompt šablony")
+                valid_links_df["hp_url"] = valid_links_df["hp_url"].astype(str).str.strip()
+                valid_links_df["gw_url"] = valid_links_df["gw_url"].astype(str).str.strip()
+                valid_links_df = valid_links_df[valid_links_df["hp_url"] != ""]
 
-    st.markdown("""
-    <div style="
-        background:#0f172a;
-        padding:16px 20px;
-        border-radius:12px;
-        border:1px solid #1e293b;
-        margin-bottom:16px;
-    ">
-    <b style="font-size:16px;">🧠 Prompt šablony</b><br>
-    <span style="color:#94a3b8;">
-    Vyber typ produktu a vygeneruj prompt pro AI.<br>
-    Prompt už automaticky obsahuje název produktu a EAN.<br>
-    Zkopíruj ho do AI, vygenerovaný output vlož níže a ulož jako <b>vystup_prompt.docx</b>.
-    </span>
-    </div>
-    """, unsafe_allow_html=True)
+                if valid_links_df.empty:
+                    st.error("Zadej alespoň jeden odkaz do sloupce Herní Prostor URL.")
+                else:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv", mode="w", encoding="utf-8-sig") as tmp_links:
+                        valid_links_df.to_csv(tmp_links.name, sep=";", index=False)
+                        temp_links_path = tmp_links.name
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+                    temp_main_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+                    temp_main_output.close()
 
-    def generate_prompt(prompt_type: str) -> None:
-        if uploaded_split_csv is None:
-            st.warning("Nejdřív nahraj produktové split CSV.")
-            return
+                    temp_split_dir = tempfile.mkdtemp(prefix="warhammer_split_")
 
-        try:
-            template_path = PROMPT_TEMPLATE_DIR / f"{prompt_type}.txt"
+                    result = run_scraper(
+                        input_links=temp_links_path,
+                        output=temp_main_output.name,
+                        tpl_dir=template_dir,
+                        split_out_dir=temp_split_dir,
+                        split_by_type=split_by_type,
+                        verbose=verbose_mode,
+                    )
 
-            if not template_path.exists():
-                st.error(f"Šablona nenalezena: {template_path}")
+                    st.success("Scraper proběhl úspěšně.")
+                    st.write("Počet produktů:", result["row_count"])
+
+                    main_csv_bytes = Path(result["output_csv"]).read_bytes()
+
+                    first_product_name = "shoptet_CREATE_CZ"
+                    if result.get("rows"):
+                        first_product_name = result["rows"][0].get("name:cs", "") or "shoptet_CREATE_CZ"
+
+                    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", first_product_name)
+                    file_name = f"{safe_name}_CREATE_CZ.csv"
+
+                    st.download_button(
+                        label="Stáhnout hlavní CSV",
+                        data=main_csv_bytes,
+                        file_name=file_name,
+                        mime="text/csv",
+                        key="download_main_scraper_csv",
+                    )
+
+                    if result["split_files"]:
+                        st.subheader("Vygenerované split CSV soubory")
+                        for file_path in result["split_files"][:50]:
+                            p = Path(file_path)
+                            st.download_button(
+                                label=f"Stáhnout {p.name}",
+                                data=p.read_bytes(),
+                                file_name=p.name,
+                                mime="text/csv",
+                                key=f"download_split_{p.name}",
+                            )
+
+            except Exception as e:
+                st.error(f"Chyba při scrapování: {e}")
+
+
+    with tab2:
+        st.header("Prompt")
+
+        uploaded_split_csv = st.file_uploader(
+            "Nahraj produktové split CSV  - soubor co jsi vygeneroval v předchozím kroku - v záložce Scraper",
+            type=["csv"],
+            key="prompt_uploaded_csv",
+        )
+
+        product_name = ""
+        product_ean = ""
+
+        if uploaded_split_csv is not None:
+            try:
+                df_preview = pd.read_csv(uploaded_split_csv, sep=";", dtype=str).fillna("")
+
+                if not df_preview.empty:
+                    name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
+                    product_name = df_preview.iloc[0].get(name_col, "")
+                    product_ean = df_preview.iloc[0].get("ean", "")
+
+                    st.info(f"Produkt: {product_name}")
+                    st.write(f"EAN: {product_ean}")
+
+            except Exception as e:
+                st.warning(f"Nepodařilo se načíst CSV: {e}")
+
+        st.subheader("Prompt šablony")
+
+        st.markdown("""
+        <div style="
+            background:#0f172a;
+            padding:16px 20px;
+            border-radius:12px;
+            border:1px solid #1e293b;
+            margin-bottom:16px;
+        ">
+        <b style="font-size:16px;">🧠 Prompt šablony</b><br>
+        <span style="color:#94a3b8;">
+        Vyber typ produktu a vygeneruj prompt pro AI.<br>
+        Prompt už automaticky obsahuje název produktu a EAN.<br>
+        Zkopíruj ho do AI, vygenerovaný output vlož níže a ulož jako <b>vystup_prompt.docx</b>.
+        </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+
+        def generate_prompt(prompt_type: str) -> None:
+            if uploaded_split_csv is None:
+                st.warning("Nejdřív nahraj produktové split CSV.")
                 return
 
-            template_text = template_path.read_text(encoding="utf-8")
+            try:
+                template_path = PROMPT_TEMPLATE_DIR / f"{prompt_type}.txt"
 
-            prompt_text = f"""{template_text}
+                if not template_path.exists():
+                    st.error(f"Šablona nenalezena: {template_path}")
+                    return
 
---------------------------------------------------
-PRODUKT
-{product_name}
+                template_text = template_path.read_text(encoding="utf-8")
 
-EAN
-{product_ean}
---------------------------------------------------
-"""
+                prompt_text = f"""{template_text}
 
-            st.session_state["generated_prompt_text"] = prompt_text
-            st.session_state["generated_prompt_type"] = prompt_type
+    --------------------------------------------------
+    PRODUKT
+    {product_name}
 
-        except Exception as e:
-            st.error(f"Chyba při načítání promptu: {e}")
+    EAN
+    {product_ean}
+    --------------------------------------------------
+    """
 
-    with col1:
-        if st.button("Miniatures", key="prompt_btn_miniatures"):
-            generate_prompt("miniatures")
-    with col2:
-        if st.button("Books", key="prompt_btn_books"):
-            generate_prompt("books")
-    with col3:
-        if st.button("Dice", key="prompt_btn_dice"):
-            generate_prompt("dice")
-    with col4:
-        if st.button("Warscroll", key="prompt_btn_warscroll"):
-            generate_prompt("warscroll")
-    with col5:
-        if st.button("Upgrades", key="prompt_btn_upgrades"):
-            generate_prompt("upgrades")
+                st.session_state["generated_prompt_text"] = prompt_text
+                st.session_state["generated_prompt_type"] = prompt_type
 
-    if st.session_state["generated_prompt_text"]:
-        prompt_text = st.session_state["generated_prompt_text"]
+            except Exception as e:
+                st.error(f"Chyba při načítání promptu: {e}")
 
-        st.text_area(
-            f"Vygenerovaný prompt ({st.session_state['generated_prompt_type']})",
-            value=prompt_text,
-            height=350,
-            key="generated_prompt_preview",
+        with col1:
+            if st.button("Miniatures", key="prompt_btn_miniatures"):
+                generate_prompt("miniatures")
+        with col2:
+            if st.button("Books", key="prompt_btn_books"):
+                generate_prompt("books")
+        with col3:
+            if st.button("Dice", key="prompt_btn_dice"):
+                generate_prompt("dice")
+        with col4:
+            if st.button("Warscroll", key="prompt_btn_warscroll"):
+                generate_prompt("warscroll")
+        with col5:
+            if st.button("Upgrades", key="prompt_btn_upgrades"):
+                generate_prompt("upgrades")
+
+        if st.session_state["generated_prompt_text"]:
+            prompt_text = st.session_state["generated_prompt_text"]
+
+            st.text_area(
+                f"Vygenerovaný prompt ({st.session_state['generated_prompt_type']})",
+                value=prompt_text,
+                height=350,
+                key="generated_prompt_preview",
+            )
+
+            copy_text = (
+                prompt_text
+                .replace("\\", "\\\\")
+                .replace("\n", "\\n")
+                .replace("'", "\\'")
+            )
+
+            components.html(
+                f"""
+                <button onclick="navigator.clipboard.writeText('{copy_text}')" 
+                style="
+                    background-color:#1f77b4;
+                    color:white;
+                    padding:8px 16px;
+                    border:none;
+                    border-radius:6px;
+                    cursor:pointer;
+                    font-size:14px;
+                    margin-top:8px;
+                ">
+                📋 Kopírovat prompt
+                </button>
+                """,
+                height=50,
+            )
+
+        st.subheader("⬇ VLOŽ SEM AI OUTPUT")
+
+        ai_output = st.text_area(
+            "AI Output",
+            height=400,
+            key="prompt_ai_output",
+            placeholder="""
+    [LANG=cs]
+    nazev_produktu:
+    ...
+
+    [LANG=en]
+    ...
+
+    [LANG=sk]
+    ...
+    """,
         )
 
-        copy_text = (
-            prompt_text
-            .replace("\\", "\\\\")
-            .replace("\n", "\\n")
-            .replace("'", "\\'")
+        if ai_output.strip():
+            prompt_docx_bytes = make_docx_bytes(ai_output)
+
+            st.download_button(
+                label="Stáhnout vystup_prompt.docx",
+                data=prompt_docx_bytes,
+                file_name="vystup_prompt.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key="download_prompt_docx",
+            )
+
+
+    with tab3:
+        st.header("Fill")
+
+        template_type = st.selectbox(
+            "Typ šablony",
+            ["miniatures", "books", "warscroll", "dice", "upgrades"],
+            key="fill_template_type",
         )
 
-        components.html(
-            f"""
-            <button onclick="navigator.clipboard.writeText('{copy_text}')" 
-            style="
-                background-color:#1f77b4;
-                color:white;
-                padding:8px 16px;
-                border:none;
-                border-radius:6px;
-                cursor:pointer;
-                font-size:14px;
-                margin-top:8px;
-            ">
-            📋 Kopírovat prompt
-            </button>
-            """,
-            height=50,
+        uploaded_product_csv = st.file_uploader(
+            "Nahraj produktové split CSV - první soubor co jsi vygeneroval v záložce Scraper",
+            type=["csv"],
+            key="fill_uploaded_csv",
         )
 
-    st.subheader("⬇ VLOŽ SEM AI OUTPUT")
-
-    ai_output = st.text_area(
-        "AI Output",
-        height=400,
-        key="prompt_ai_output",
-        placeholder="""
-[LANG=cs]
-nazev_produktu:
-...
-
-[LANG=en]
-...
-
-[LANG=sk]
-...
-""",
-    )
-
-    if ai_output.strip():
-        prompt_docx_bytes = make_docx_bytes(ai_output)
-
-        st.download_button(
-            label="Stáhnout vystup_prompt.docx",
-            data=prompt_docx_bytes,
-            file_name="vystup_prompt.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key="download_prompt_docx",
+        uploaded_prompt_docx = st.file_uploader(
+            "Nahraj vystup_prompt.docx - soubor co jsi vygeneroval v záložce Prompt",
+            type=["docx"],
+            key="fill_uploaded_prompt_docx",
         )
 
+        template_dir = TEMPLATE_DIR_DEFAULT
 
-with tab3:
-    st.header("Fill")
-
-    template_type = st.selectbox(
-        "Typ šablony",
-        ["miniatures", "books", "warscroll", "dice", "upgrades"],
-        key="fill_template_type",
-    )
-
-    uploaded_product_csv = st.file_uploader(
-        "Nahraj produktové split CSV - první soubor co jsi vygeneroval v záložce Scraper",
-        type=["csv"],
-        key="fill_uploaded_csv",
-    )
-
-    uploaded_prompt_docx = st.file_uploader(
-        "Nahraj vystup_prompt.docx - soubor co jsi vygeneroval v záložce Prompt",
-        type=["docx"],
-        key="fill_uploaded_prompt_docx",
-    )
-
-    template_dir = TEMPLATE_DIR_DEFAULT
-
-    target_ean = st.text_input(
-        "Cílový EAN (volitelné)",
-        value="",
-        key="fill_target_ean",
-    )
-
-    target_product_name = st.text_input(
-        "Cílový název produktu (volitelné)",
-        value="",
-        key="fill_target_product_name",
-    )
-
-    debug_mode = st.checkbox("Debug výpis", value=True, key="fill_debug_mode")
-
-    if uploaded_product_csv is not None:
-        try:
-            df_preview = pd.read_csv(uploaded_product_csv, sep=";", dtype=str).fillna("")
-            if not df_preview.empty:
-                name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
-                product_name_preview = df_preview.iloc[0].get(name_col, "")
-                product_ean_preview = df_preview.iloc[0].get("ean", "")
-                st.info(f"Produkt: {product_name_preview}")
-                st.write(f"EAN: {product_ean_preview}")
-        except Exception as e:
-            st.warning(f"Nepodařilo se načíst CSV: {e}")
-
-    if st.button("Spustit fill", key="fill_run_button"):
-        try:
-            if uploaded_product_csv is None:
-                st.error("Nahraj produktové split CSV.")
-            elif uploaded_prompt_docx is None:
-                st.error("Nahraj vystup_prompt.docx.")
-            else:
-                temp_csv_path = save_uploaded_file_to_temp(uploaded_product_csv, ".csv")
-                temp_prompt_docx_path = save_uploaded_file_to_temp(uploaded_prompt_docx, ".docx")
-
-                temp_filled_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-                temp_filled_output.close()
-
-                temp_create_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-                temp_create_output.close()
-
-                result = run_filler(
-                    template_type=template_type,
-                    csv_path=temp_csv_path,
-                    template_dir=template_dir,
-                    prompt_output_docx_path=temp_prompt_docx_path,
-                    output_csv_path=temp_filled_output.name,
-                    output_create_csv_path=temp_create_output.name,
-                    target_product_name=target_product_name or None,
-                    target_ean=target_ean or None,
-                    debug=debug_mode,
-                )
-
-                st.success("Fill proběhl úspěšně.")
-                st.write("Produkt:", result["product_name"])
-
-                filled_csv_bytes = Path(result["output_csv"]).read_bytes()
-                create_csv_bytes = Path(result["output_create_csv"]).read_bytes()
-
-                st.session_state["filled_csv_bytes"] = filled_csv_bytes
-                st.session_state["create_csv_bytes"] = create_csv_bytes
-                st.session_state["fill_product_name"] = result["product_name"]
-
-                st.success("Výstupy jsou připravené ke stažení níže.")
-
-        except Exception as e:
-            st.exception(e)
-
-    if st.session_state["filled_csv_bytes"] and st.session_state["create_csv_bytes"]:
-        st.subheader("Výstupy ke stažení")
-
-        if st.session_state["fill_product_name"]:
-            st.write("Produkt:", st.session_state["fill_product_name"])
-
-        st.download_button(
-            label="Stáhnout FILLED CSV",
-            data=st.session_state["filled_csv_bytes"],
-            file_name="0_FILLED.csv",
-            mime="text/csv",
-            key="download_filled_csv_persistent",
+        target_ean = st.text_input(
+            "Cílový EAN (volitelné)",
+            value="",
+            key="fill_target_ean",
         )
 
-        st.download_button(
-            label="Stáhnout CREATE CSV",
-            data=st.session_state["create_csv_bytes"],
-            file_name="0_CREATE.csv",
-            mime="text/csv",
-            key="download_create_csv_persistent",
+        target_product_name = st.text_input(
+            "Cílový název produktu (volitelné)",
+            value="",
+            key="fill_target_product_name",
         )
 
-        if st.button("Vymazat výstupy", key="clear_fill_outputs"):
-            st.session_state["filled_csv_bytes"] = None
-            st.session_state["create_csv_bytes"] = None
-            st.session_state["fill_product_name"] = ""
-            st.rerun()
+        debug_mode = st.checkbox("Debug výpis", value=True, key="fill_debug_mode")
 
-       
+        if uploaded_product_csv is not None:
+            try:
+                df_preview = pd.read_csv(uploaded_product_csv, sep=";", dtype=str).fillna("")
+                if not df_preview.empty:
+                    name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
+                    product_name_preview = df_preview.iloc[0].get(name_col, "")
+                    product_ean_preview = df_preview.iloc[0].get("ean", "")
+                    st.info(f"Produkt: {product_name_preview}")
+                    st.write(f"EAN: {product_ean_preview}")
+            except Exception as e:
+                st.warning(f"Nepodařilo se načíst CSV: {e}")
+
+        if st.button("Spustit fill", key="fill_run_button"):
+            try:
+                if uploaded_product_csv is None:
+                    st.error("Nahraj produktové split CSV.")
+                elif uploaded_prompt_docx is None:
+                    st.error("Nahraj vystup_prompt.docx.")
+                else:
+                    temp_csv_path = save_uploaded_file_to_temp(uploaded_product_csv, ".csv")
+                    temp_prompt_docx_path = save_uploaded_file_to_temp(uploaded_prompt_docx, ".docx")
+
+                    temp_filled_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+                    temp_filled_output.close()
+
+                    temp_create_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+                    temp_create_output.close()
+
+                    result = run_filler(
+                        template_type=template_type,
+                        csv_path=temp_csv_path,
+                        template_dir=template_dir,
+                        prompt_output_docx_path=temp_prompt_docx_path,
+                        output_csv_path=temp_filled_output.name,
+                        output_create_csv_path=temp_create_output.name,
+                        target_product_name=target_product_name or None,
+                        target_ean=target_ean or None,
+                        debug=debug_mode,
+                    )
+
+                    st.success("Fill proběhl úspěšně.")
+                    st.write("Produkt:", result["product_name"])
+
+                    filled_csv_bytes = Path(result["output_csv"]).read_bytes()
+                    create_csv_bytes = Path(result["output_create_csv"]).read_bytes()
+
+                    st.session_state["filled_csv_bytes"] = filled_csv_bytes
+                    st.session_state["create_csv_bytes"] = create_csv_bytes
+                    st.session_state["fill_product_name"] = result["product_name"]
+
+                    st.success("Výstupy jsou připravené ke stažení níže.")
+
+            except Exception as e:
+                st.exception(e)
+
+        if st.session_state["filled_csv_bytes"] and st.session_state["create_csv_bytes"]:
+            st.subheader("Výstupy ke stažení")
+
+            if st.session_state["fill_product_name"]:
+                st.write("Produkt:", st.session_state["fill_product_name"])
+
+            st.download_button(
+                label="Stáhnout FILLED CSV",
+                data=st.session_state["filled_csv_bytes"],
+                file_name="0_FILLED.csv",
+                mime="text/csv",
+                key="download_filled_csv_persistent",
+            )
+
+            st.download_button(
+                label="Stáhnout CREATE CSV",
+                data=st.session_state["create_csv_bytes"],
+                file_name="0_CREATE.csv",
+                mime="text/csv",
+                key="download_create_csv_persistent",
+            )
+
+            if st.button("Vymazat výstupy", key="clear_fill_outputs"):
+                st.session_state["filled_csv_bytes"] = None
+                st.session_state["create_csv_bytes"] = None
+                st.session_state["fill_product_name"] = ""
+                st.rerun()
+
+    if engine == "MIG / AMMO":
+        mig_tab1, mig_tab2 = st.tabs(["Barvy", "Příslušenství"])
+
+        with mig_tab1:
+            st.header("MIG / AMMO – Barvy")
+
+            mode = st.radio(
+                "Režim",
+                ["Nová karta", "Popisy"],
+                horizontal=True,
+                key="mig_paints_mode"
+            )
+
+            if mode == "Nová karta":
+                st.subheader("Vytvoření nové produktové karty")
+
+                name = st.text_input("Název produktu")
+                code = st.text_input("Kód produktu")
+                ean = st.text_input("EAN")
+                price = st.number_input("Cena", min_value=0.0)
+
+                if st.button("Vytvořit CSV", key="create_mig_paint_csv"):
+                    if not name or not code:
+                        st.warning("Vyplň název a kód produktu")
+                    else:
+                        df = pd.DataFrame([{
+                            "code": code,
+                            "name": name,
+                            "ean": ean,
+                            "price": price,
+                            "manufacturer": "AMMO by MIG",
+                            "supplier": "AMMO",
+                            "availabilityInStock": "Skladem",
+                            "availabilityOutOfStock": "Na dotaz",
+                            "googleCategoryIdInFeed": 6000,
+                            "heurekaCategoryId": 2351,
+                            "zboziCategoryId": 2413,
+                            "googleCategoryId": 6000,
+                            "itemType": "mig_paint"
+                        }])
+
+                        csv = df.to_csv(index=False).encode("utf-8")
+
+                        st.success("CSV vytvořeno")
+
+                        st.download_button(
+                            "Stáhnout CSV",
+                            csv,
+                            file_name=f"{code}_CREATE.csv",
+                            mime="text/csv",
+                        )
+
+        with mig_tab2:
+            st.header("MIG / AMMO – Příslušenství")
+            st.info("Sem přidáme workflow pro tvorbu nové karty a generování popisů pro příslušenství.")    
