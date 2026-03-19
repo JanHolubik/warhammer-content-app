@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -178,16 +179,11 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                 key=f"{prompt_type}_prompt_preview",
             )
 
-            copy_text = (
-                prompt_text
-                .replace("\\", "\\\\")
-                .replace("\n", "\\n")
-                .replace("'", "\\'")
-            )
+            copy_text = json.dumps(prompt_text)
 
-            components.html(
+            st.components.v1.html(
                 f"""
-                <button onclick="navigator.clipboard.writeText('{copy_text}')" 
+                <button onclick='navigator.clipboard.writeText({copy_text})'
                 style="
                     background-color:#1f77b4;
                     color:white;
