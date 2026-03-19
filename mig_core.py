@@ -26,6 +26,8 @@ def create_mig_card_row(
     product_type: str,
     description: str = "",
 ) -> pd.DataFrame:
+    seo_title = f"{name} | AMMO by MIG"
+
     row = {
         "code": code,
         "name": name,
@@ -40,19 +42,28 @@ def create_mig_card_row(
         "zboziCategoryId": 2413,
         "googleCategoryId": 6000,
         "itemType": product_type,
-        "seoTitle:cs": name,
-        "seoTitle:en": name,
-        "seoTitle:sk": name,
+
+        "seoTitle:cs": seo_title,
+        "seoTitle:en": seo_title,
+        "seoTitle:sk": seo_title,
+
         "xmlFeedName:cs": name,
         "xmlFeedName:en": name,
         "xmlFeedName:sk": name,
+
         "shortDescription:cs": "",
         "shortDescription:en": "",
         "shortDescription:sk": "",
+
         "description:cs": "",
         "description:en": "",
         "description:sk": "",
+
+        "metaDescription:cs": "",
+        "metaDescription:en": "",
+        "metaDescription:sk": "",
     }
+
     return pd.DataFrame([row])
 
 
@@ -190,8 +201,11 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
         out[f"description:{lang}"] = replace_placeholders_in_docx(long_files[lang], values)
 
         product_name = values.get("nazev_produktu", "")
-        out[f"seoTitle:{lang}"] = product_name
+        short_desc = values.get("strucny_popis_produktu", "")
+
+        out[f"seoTitle:{lang}"] = f"{product_name} | AMMO by MIG" if product_name else ""
         out[f"xmlFeedName:{lang}"] = product_name
+        out[f"metaDescription:{lang}"] = short_desc[:160] if short_desc else ""
 
     return out
 
