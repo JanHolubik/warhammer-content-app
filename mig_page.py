@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from mig_core import (
     create_mig_card_row,
@@ -44,11 +45,54 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
     with subtab1:
         st.subheader(f"{product_type_label} – vytvoření nové karty")
 
+        st.markdown("""
+        <div style="
+            background:#0f172a;
+            padding:16px 20px;
+            border-radius:12px;
+            border:1px solid #1e293b;
+            margin-bottom:16px;
+        ">
+        <b style="font-size:16px;">🧩 Nová karta – MIG</b><br>
+        <span style="color:#94a3b8;">
+        Tato sekce vytvoří základní produkt pro Shoptet (CREATE CSV).<br><br>
+
+        Vyplňuješ pouze:
+        <ul>
+        <li>Název produktu</li>
+        <li>Code (nebo kód výrobce)</li>
+        <li>EAN (pokud existuje)</li>
+        <li>Prodejní cenu</li>
+        <li>Doporučenou cenu výrobce</li>
+        </ul>
+
+        ➡️ Automaticky se dopočítá:
+        <ul>
+        <li>Cena bez DPH (priceWithoutVat)</li>
+        <li>Dostupnost produktu</li>
+        <li>Výrobce</li>
+        </ul>
+
+        <b style="color:#38bdf8;">⚡ Tip:</b> CREATE slouží jen pro založení produktu – popisy řeš v záložce níže přes AI.
+        </span>
+        </div>
+        """, unsafe_allow_html=True)
+
         name = st.text_input("Název produktu", key=f"{prompt_type}_name")
-        code = st.text_input("Code - Pokud není EAN, tak zadávat kód značky", key=f"{prompt_type}_code")
+        code = st.text_input("Code – pokud není EAN, tak zadej kód značky", key=f"{prompt_type}_code")
         ean = st.text_input("EAN kód", key=f"{prompt_type}_ean")
-        price = st.number_input("Naše prodejní Cena", min_value=0.0, step=1.0, key=f"{prompt_type}_price")
-        standard_price = st.number_input("Standardní cena", min_value=0.0, step=1.0, key=f"{prompt_type}_standard_price")
+        price = st.number_input(
+            "Naše prodejní cena (s DPH)",
+            min_value=0.0,
+            step=1.0,
+            key=f"{prompt_type}_price"
+        )
+        standard_price = st.number_input(
+            "Doporučená cena výrobce",
+            min_value=0.0,
+            step=1.0,
+            key=f"{prompt_type}_standard_price"
+        )
         description = st.text_area("Základní popis", key=f"{prompt_type}_desc")
 
         if st.button("Vytvořit CREATE CSV", key=f"{prompt_type}_create_btn"):
@@ -64,6 +108,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     product_type=item_type,
                     description=description,
                 )
+
                 csv_bytes = df.to_csv(index=False, sep=";").encode("utf-8-sig")
 
                 st.download_button(
@@ -91,7 +136,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
         if uploaded_csv is not None:
             try:
                 df = pd.read_csv(uploaded_csv, sep=";", dtype=str).fillna("")
-                
+
                 if "name" in df.columns:
                     product_options = [f"{i} | {row['name']}" for i, row in df.iterrows()]
                     selected = st.selectbox(
@@ -106,7 +151,6 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
-
                 else:
                     st.error(f"CSV neobsahuje sloupec 'name'. Nalezené sloupce: {list(df.columns)}")
 
@@ -125,11 +169,39 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                 st.session_state["mig_generated_prompt_type"] = prompt_type
 
         if st.session_state["mig_generated_prompt_text"]:
+            prompt_text = st.session_state["mig_generated_prompt_text"]
+
             st.text_area(
                 "Vygenerovaný prompt",
-                value=st.session_state["mig_generated_prompt_text"],
+                value=prompt_text,
                 height=320,
                 key=f"{prompt_type}_prompt_preview",
+            )
+
+            copy_text = (
+                prompt_text
+                .replace("\\", "\\\\")
+                .replace("\n", "\\n")
+                .replace("'", "\\'")
+            )
+
+            components.html(
+                f"""
+                <button onclick="navigator.clipboard.writeText('{copy_text}')" 
+                style="
+                    background-color:#1f77b4;
+                    color:white;
+                    padding:10px 18px;
+                    border:none;
+                    border-radius:8px;
+                    cursor:pointer;
+                    font-size:14px;
+                    margin-top:10px;
+                ">
+                📋 Kopírovat prompt
+                </button>
+                """,
+                height=60,
             )
 
         ai_output = st.text_area(
@@ -170,7 +242,10 @@ nazev_produktu:
                         ai_output=ai_output,
                         template_kind=prompt_type,
                     )
-                    st.session_state["mig_export_csv_bytes"] = out_df.to_csv(index=False, sep=";").encode("utf-8-sig")
+                    st.session_state["mig_export_csv_bytes"] = out_df.to_csv(
+                        index=False,
+                        sep=";"
+                    ).encode("utf-8-sig")
                     st.success("CSV připraveno ke stažení.")
                 except Exception as e:
                     st.error(f"Chyba při zpracování: {e}")
