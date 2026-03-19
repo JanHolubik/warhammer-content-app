@@ -30,6 +30,7 @@ def create_mig_card_row(
 
     row = {
         "code": code,
+        "externalCode": code,
         "name": name,
         "ean": ean,
         "price": price,
