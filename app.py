@@ -14,6 +14,8 @@ from scraper_core import run_scraper
 PROMPT_TEMPLATE_DIR = Path("prompt_templates")
 TEMPLATE_DIR_DEFAULT = "sablony"
 
+st.set_option("client.showSidebarNavigation", True)
+
 st.set_page_config(
     page_title="Warhammer Content App",
     layout="wide",
