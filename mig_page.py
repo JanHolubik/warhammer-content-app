@@ -62,7 +62,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     product_type=item_type,
                     description=description,
                 )
-                csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+                csv_bytes = df.to_csv(index=False, sep=";").encode("utf-8-sig")
 
                 st.download_button(
                     "Stáhnout CREATE CSV",

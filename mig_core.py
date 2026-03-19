@@ -26,8 +26,6 @@ def create_mig_card_row(
     product_type: str,
     description: str = "",
 ) -> pd.DataFrame:
-    seo_title = f"{name} | AMMO by MIG"
-
     row = {
         "code": code,
         "externalCode": code,
@@ -43,26 +41,6 @@ def create_mig_card_row(
         "zboziCategoryId": 2413,
         "googleCategoryId": 6000,
         "itemType": product_type,
-
-        "seoTitle:cs": seo_title,
-        "seoTitle:en": seo_title,
-        "seoTitle:sk": seo_title,
-
-        "xmlFeedName:cs": name,
-        "xmlFeedName:en": name,
-        "xmlFeedName:sk": name,
-
-        "shortDescription:cs": "",
-        "shortDescription:en": "",
-        "shortDescription:sk": "",
-
-        "description:cs": "",
-        "description:en": "",
-        "description:sk": "",
-
-        "metaDescription:cs": "",
-        "metaDescription:en": "",
-        "metaDescription:sk": "",
     }
 
     return pd.DataFrame([row])
