@@ -191,17 +191,17 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                 style="
                     background-color:#1f77b4;
                     color:white;
-                    padding:10px 18px;
+                    padding:8px 16px;
                     border:none;
-                    border-radius:8px;
+                    border-radius:6px;
                     cursor:pointer;
                     font-size:14px;
-                    margin-top:10px;
+                    margin-top:8px;
                 ">
                 📋 Kopírovat prompt
                 </button>
                 """,
-                height=60,
+                height=50,
             )
 
         ai_output = st.text_area(
