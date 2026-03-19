@@ -80,8 +80,8 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
         """, unsafe_allow_html=True)
 
         name = st.text_input("Název produktu", key=f"{prompt_type}_name")
-        code = st.text_input("Code – pokud není EAN, tak zadej kód značky", key=f"{prompt_type}_code")
-        ean = st.text_input("EAN kód", key=f"{prompt_type}_ean")
+        code = st.text_input("Code – Kód produktu - vždycky", key=f"{prompt_type}_code")
+        ean = st.text_input("EAN kód - ze záložky sklad", key=f"{prompt_type}_ean")
         price = st.number_input(
             "Naše prodejní cena (s DPH)",
             min_value=0.0,
