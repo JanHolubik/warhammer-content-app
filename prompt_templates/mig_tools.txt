@@ -111,9 +111,14 @@ obrazek:
 ---
 
 TECHNICKÁ PRAVIDLA
+Pokud není známo URL obrázku, hodnota musí být přesně:
+""
 
-Pokud není známo URL:
-obrazek → ""
+Týká se polí:
+intro_image_src
+img1_src
+img2_src
+img3_src
 
 ---
 
