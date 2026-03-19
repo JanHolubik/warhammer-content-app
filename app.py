@@ -24,6 +24,28 @@ st.set_page_config(
 
 st.title("Warhammer Content App")
 
+if "selected_engine" not in st.session_state:
+    st.session_state["selected_engine"] = None
+
+if st.session_state["selected_engine"] is None:
+
+    st.title("Content Apps")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Warhammer")
+        if st.button("Otevřít Warhammer", use_container_width=True):
+            st.session_state["selected_engine"] = "warhammer"
+            st.rerun()
+
+    with col2:
+        st.subheader("MIG AMMO")
+        if st.button("Otevřít MIG", use_container_width=True):
+            st.session_state["selected_engine"] = "mig"
+            st.rerun()
+
+
 st.markdown("""
 <style>
 /* celý tab button */
@@ -78,6 +100,12 @@ def make_docx_bytes(text: str) -> bytes:
     buffer.seek(0)
     return buffer.getvalue()
 
+
+if st.session_state["selected_engine"] == "warhammer":
+
+    if st.button("← Zpět", key="back_from_warhammer"):
+        st.session_state["selected_engine"] = None
+        st.rerun()
 
 tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
 
