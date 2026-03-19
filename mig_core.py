@@ -23,15 +23,19 @@ def create_mig_card_row(
     code: str,
     ean: str,
     price: float,
+    standard_price: float,
     product_type: str,
     description: str = "",
 ) -> pd.DataFrame:
+    price_without_vat = round(price / 1.21, 2)
     row = {
         "code": code,
         "externalCode": code,
         "name": name,
         "ean": ean,
         "price": price,
+        "priceWithoutVat": price_without_vat,
+        "standardPrice": standard_price,
         "description": description,
         "manufacturer": "AMMO by MIG",
         "availabilityInStock": "Skladem",

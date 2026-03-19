@@ -42,12 +42,13 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
     subtab1, subtab2 = st.tabs(["Nová karta", "Prompt + Fill"])
 
     with subtab1:
-        st.subheader(f"{product_type_label} – nová karta")
+        st.subheader(f"{product_type_label} – vytvoření nové karty")
 
         name = st.text_input("Název produktu", key=f"{prompt_type}_name")
-        code = st.text_input("Code", key=f"{prompt_type}_code")
-        ean = st.text_input("EAN", key=f"{prompt_type}_ean")
-        price = st.number_input("Cena", min_value=0.0, step=1.0, key=f"{prompt_type}_price")
+        code = st.text_input("Code - Pokud není EAN, tak zadávat kód značky", key=f"{prompt_type}_code")
+        ean = st.text_input("EAN kód", key=f"{prompt_type}_ean")
+        price = st.number_input("Naše prodejní Cena", min_value=0.0, step=1.0, key=f"{prompt_type}_price")
+        standard_price = st.number_input("Standardní cena", min_value=0.0, step=1.0, key=f"{prompt_type}_standard_price")
         description = st.text_area("Základní popis", key=f"{prompt_type}_desc")
 
         if st.button("Vytvořit CREATE CSV", key=f"{prompt_type}_create_btn"):
@@ -59,6 +60,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     code=code,
                     ean=ean,
                     price=price,
+                    standard_price=standard_price,
                     product_type=item_type,
                     description=description,
                 )
@@ -158,7 +160,7 @@ nazev_produktu:
                         ai_output=ai_output,
                         template_kind=prompt_type,
                     )
-                    st.session_state["mig_export_csv_bytes"] = out_df.to_csv(index=False).encode("utf-8-sig")
+                    st.session_state["mig_export_csv_bytes"] = out_df.to_csv(index=False, sep=";").encode("utf-8-sig")
                     st.success("CSV připraveno ke stažení.")
                 except Exception as e:
                     st.error(f"Chyba při zpracování: {e}")
