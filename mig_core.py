@@ -45,7 +45,6 @@ def create_mig_card_row(
         "heurekaCategoryId": 2351,
         "zboziCategoryId": 2413,
         "googleCategoryId": 6000,
-        "itemType": product_type,
     }
 
     return pd.DataFrame([row])
