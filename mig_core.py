@@ -185,11 +185,19 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
 
         product_name = values.get("nazev_produktu", "")
         short_desc = values.get("strucny_popis_produktu", "")
+        product_name = values.get("nazev_produktu", "")
+        short_desc = values.get("strucny_popis_produktu", "")
+
+        # odstranění duplicitního názvu na začátku
+        if short_desc.lower().startswith(product_name.lower()):
+            short_desc = short_desc[len(product_name):].strip()
+
+        final_short = f"{product_name} {short_desc}".strip()
         
         out[f"name:{lang}"] = product_name
         out[f"seoTitle:{lang}"] = f"{product_name} | AMMO by MIG" if product_name else ""
         out[f"xmlFeedName:{lang}"] = product_name
-        out[f"metaDescription:{lang}"] = short_desc[:160] if short_desc else ""
+        out[f"metaDescription:{lang}"] = final_short[:155] if final_short else ""
 
     return out
 
