@@ -673,21 +673,40 @@ def is_missing_image(u: str) -> bool:
 
 def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
     out: List[str] = []
+
     for u in urls:
         if not u or is_missing_image(u):
             continue
+
         try:
             p = urlparse(u)
-            path = p.path or ""
+            path = (p.path or "").lower()
+            netloc = (p.netloc or "").lower()
         except Exception:
-            path = u
+            path = str(u).lower()
+            netloc = ""
 
-        if "/app/resources/catalog/product/" not in path:
-            continue
-        if (not keep_360) and ("/threeSixty/" in path):
+        # nechceme 360 obrázky, pokud nejsou povolené
+        if (not keep_360) and ("threesixty" in path or "360" in path):
             continue
 
-        out.append(u)
+        # povol různé GW/CDN cesty, nejen jednu historickou
+        allowed = (
+            "warhammer.com" in netloc
+            or "games-workshop.com" in netloc
+            or "gwplc" in netloc
+            or "/app/resources/catalog/product/" in path
+            or "/catalog/product/" in path
+            or "/media/catalog/product/" in path
+            or "/resources/catalog/product/" in path
+        )
+
+        # zároveň musí aspoň trochu vypadat jako obrázek
+        looks_like_image = any(ext in path for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"])
+
+        if allowed or looks_like_image:
+            out.append(u)
+
     return out
 
 
@@ -801,17 +820,20 @@ def scrape_gw_images_fallback_simple(
     ensure_query_default: str = "fm=webp&w=1200&h=1237",
 ) -> List[str]:
     soup = BeautifulSoup(html, "lxml")
-
     urls: List[str] = []
 
-    # Meta obrázky
+    # 1) meta obrázky
     for meta in soup.select('meta[property="og:image"], meta[name="twitter:image"]'):
         u = (meta.get("content") or "").strip()
         if u:
             urls.append(abs_url(gw_url, u))
 
-    # Všechny img/source kandidáty
+    # 2) img + source
     urls.extend(extract_imgs_from_node(soup, gw_url))
+
+    # 3) jakékoliv raw url v html, které vypadají jako obrázky
+    raw_matches = re.findall(r'https://[^"\']+\.(?:jpg|jpeg|png|webp|avif)[^"\']*', html, flags=re.I)
+    urls.extend(raw_matches)
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = dedupe_by_filename(uniq_keep_order(urls))
