@@ -1,7 +1,6 @@
 import json
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
 from mig_core import (
     create_mig_card_row,
@@ -175,51 +174,66 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                 )
                 st.session_state["mig_generated_prompt_type"] = prompt_type
 
-        if st.session_state["mig_generated_prompt_text"]:
-            prompt_text = st.session_state["mig_generated_prompt_text"]
+                if st.session_state["mig_generated_prompt_text"]:
+                    prompt_text = st.session_state["mig_generated_prompt_text"]
 
-            st.text_area(
-                "Vygenerovaný prompt",
-                value=prompt_text,
-                height=320,
-                key=f"{prompt_type}_prompt_preview",
-            )
+                    st.text_area(
+                        "Vygenerovaný prompt",
+                        value=prompt_text,
+                        height=320,
+                        key=f"{prompt_type}_prompt_preview",
+                    )
 
-            copy_text = json.dumps(prompt_text)
+                    copy_text = json.dumps(prompt_text)
 
-            st.components.v1.html(
-                f"""
-                <button onclick='navigator.clipboard.writeText({copy_text})'
-                style="
-                    background-color:#1f77b4;
-                    color:white;
-                    padding:8px 16px;
-                    border:none;
-                    border-radius:6px;
-                    cursor:pointer;
-                    font-size:14px;
-                    margin-top:8px;
-                ">
-                📋 Kopírovat prompt
-                </button>
-                """,
-                height=50,
-            )
+                    st.components.v1.html(
+                        f"""
+                        <button onclick='navigator.clipboard.writeText({copy_text})'
+                        style="
+                            background-color:#1f77b4;
+                            color:white;
+                            padding:8px 16px;
+                            border:none;
+                            border-radius:6px;
+                            cursor:pointer;
+                            font-size:14px;
+                            margin-top:8px;
+                        ">
+                        📋 Kopírovat prompt
+                        </button>
+                        """,
+                        height=50,
+                    )
 
-        ai_output = st.text_area(
-            "AI Output",
-            height=420,
-            key=f"{prompt_type}_ai_output",
-            placeholder="""[LANG=cs]
-nazev_produktu:
-...
+                ai_output = st.text_area(
+                    "AI Output",
+                    height=420,
+                    key=f"{prompt_type}_ai_output",
+                    placeholder="""[LANG=cs]
+        nazev_produktu:
+        ...
 
-[LANG=en]
-...
+        [LANG=en]
+        ...
 
-[LANG=sk]
-...""",
-        )
+        [LANG=sk]
+        ...""",
+                )
+
+                st.markdown("### Odkazy na obrázky")
+
+                img1_src = st.text_input(
+                    "Odkaz na obrázek 1",
+                    key=f"{prompt_type}_img1_src"
+                )
+                img2_src = st.text_input(
+                    "Odkaz na obrázek 2",
+                    key=f"{prompt_type}_img2_src"
+                )
+                img3_src = st.text_input(
+                    "Odkaz na obrázek 3",
+                    key=f"{prompt_type}_img3_src"
+                )
 
         if ai_output.strip():
             prompt_docx_bytes = make_docx_bytes(ai_output)
@@ -238,11 +252,19 @@ nazev_produktu:
                 st.warning("Vlož AI output.")
             else:
                 try:
+                    extra_values = {
+                        "img1_src": img1_src.strip(),
+                        "img2_src": img2_src.strip(),
+                        "img3_src": img3_src.strip(),
+                    }
+                    extra_values = {k: v for k, v in extra_values.items() if v}
+
                     out_df = apply_mig_output_to_csv(
                         df=df,
                         row_index=row_index,
                         ai_output=ai_output,
                         template_kind=prompt_type,
+                        extra_values=extra_values,
                     )
                     st.session_state["mig_export_csv_bytes"] = out_df.to_csv(
                         index=False,

@@ -204,8 +204,18 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
     return out
 
 
-def apply_mig_output_to_csv(df: pd.DataFrame, row_index: int, ai_output: str, template_kind: str) -> pd.DataFrame:
+def apply_mig_output_to_csv(
+    df: pd.DataFrame,
+    row_index: int,
+    ai_output: str,
+    template_kind: str,
+    extra_values: dict | None = None,
+) -> pd.DataFrame:
     html_map = build_mig_html(ai_output, template_kind)
+
+    if extra_values:
+        html_map.update(extra_values)
+
     df_out = df.copy()
 
     for col, value in html_map.items():
@@ -270,5 +280,6 @@ def apply_mig_output_to_csv(df: pd.DataFrame, row_index: int, ai_output: str, te
     remaining_cols = [col for col in df_out.columns if col not in existing_preferred]
 
     df_out = df_out[existing_preferred + remaining_cols]
+    df_out = df_out.fillna("")
 
     return df_out

@@ -792,6 +792,37 @@ def scrape_gw_images_stable(
     return merged
 
 
+def scrape_gw_images_fallback_simple(
+    gw_url: str,
+    html: str,
+    max_images: int = 20,
+    keep_360: bool = False,
+    ensure_query: bool = False,
+    ensure_query_default: str = "fm=webp&w=1200&h=1237",
+) -> List[str]:
+    soup = BeautifulSoup(html, "lxml")
+
+    urls: List[str] = []
+
+    # Meta obrázky
+    for meta in soup.select('meta[property="og:image"], meta[name="twitter:image"]'):
+        u = (meta.get("content") or "").strip()
+        if u:
+            urls.append(abs_url(gw_url, u))
+
+    # Všechny img/source kandidáty
+    urls.extend(extract_imgs_from_node(soup, gw_url))
+
+    urls = filter_gw_product_images(urls, keep_360=keep_360)
+    urls = dedupe_by_filename(uniq_keep_order(urls))
+    urls = urls[:max_images]
+
+    if ensure_query:
+        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
+
+    return urls
+
+
 # =========================
 # TEMPLATE RESOLUTION
 # =========================
@@ -999,6 +1030,17 @@ def run_scraper(
                     keep_360=bool(keep_360),
                     ensure_query=bool(images_ensure_query),
                 )
+
+                if not images:
+                    log("GW stable image scrape returned 0 images, trying fallback...", verbose)
+                    images = scrape_gw_images_fallback_simple(
+                        gw_final,
+                        gw_html,
+                        max_images=max_images,
+                        keep_360=bool(keep_360),
+                        ensure_query=bool(images_ensure_query),
+                    )
+
             except Exception as e:
                 log(f"GW ERROR: {e}", verbose)
                 images = []
@@ -1028,6 +1070,10 @@ def run_scraper(
             f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
             f" | imgs={len(images)}"
         )
+        if images:
+            print(f"  first image: {images[0]}")
+        else:
+            print("  first image: -")
         print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
         print("  ✅ OK\n")
 

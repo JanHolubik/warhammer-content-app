@@ -360,6 +360,28 @@ nazev_produktu:
 ...
 """,
         )
+        st.markdown("### Odkazy na obrázky a video")
+
+        intro_image_src = st.text_input("Hlavní obrázek", key="wh_intro_image_src")
+        img1_src = st.text_input("Obrázek 1", key="wh_img1_src")
+        img2_src = st.text_input("Obrázek 2", key="wh_img2_src")
+        img3_src = st.text_input("Obrázek 3", key="wh_img3_src")
+        img4_src = st.text_input("Obrázek 4", key="wh_img4_src")
+        video_url = st.text_input("Video URL", key="wh_video_url")
+
+        st.markdown("### Proklikávací odkazy")
+
+        link_1_label = st.text_input("Text odkazu 1", key="wh_link_1_label")
+        link_1_url = st.text_input("URL odkazu 1", key="wh_link_1_url")
+
+        link_2_label = st.text_input("Text odkazu 2", key="wh_link_2_label")
+        link_2_url = st.text_input("URL odkazu 2", key="wh_link_2_url")
+
+        link_3_label = st.text_input("Text odkazu 3", key="wh_link_3_label")
+        link_3_url = st.text_input("URL odkazu 3", key="wh_link_3_url")
+
+        link4_label = st.text_input("Text odkazu 4", key="wh_link_4_label")
+        link4_url = st.text_input("URL odkazu 4", key="wh_link_4_url")
 
         if ai_output.strip():
             prompt_docx_bytes = make_docx_bytes(ai_output)
