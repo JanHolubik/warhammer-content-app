@@ -117,6 +117,8 @@ konkretni_aplikace:
 strucne_vyhody_a_prinos_pro_zakaznika:
 doporucene_kombinace:
 prakticky_tip:
+zarazeni_produktu_a_rada:
+specialni_vlastnosti
 
 strucny_popis_produktu:
 podrobnejsi_popis_produktu:
