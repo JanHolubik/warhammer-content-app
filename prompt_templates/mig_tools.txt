@@ -25,6 +25,30 @@ Text NESMÍ působit:
 genericky
 technicky
 roboticky
+-------
+DŮRAZ NA REALITU A PRODEJ
+
+Každý text musí obsahovat:
+- konkrétní problém modeláře (např. trhání obtisků, posouvání, bubliny)
+- jasné řešení pomocí produktu
+- konkrétní výsledek (lepší detail, čistší model, rychlejší práce)
+
+Používej formulace:
+- „žádné…“
+- „bez…“
+- „na první pokus“
+- „přesně tam, kde potřebuješ“
+- „bez poškození“
+
+Vyhýbej se obecným větám jako:
+- „ideální pro“
+- „vysoká kvalita“
+
+Místo toho popisuj:
+CO se stane při použití
+JAK to pomůže
+PROČ je to lepší než běžné nástroje
+
 
 ---
 
@@ -62,7 +86,17 @@ FORMÁT VÝSTUPU
 Každý blok musí obsahovat stejné klíče ve stejném pořadí.
 
 ---
+STYL
 
+Piš jako zkušený modelář, ne jako katalog.
+Text musí působit:
+- prakticky
+- reálně
+- lehce „inside hobby“
+
+Neformální, ale ne přehnaně.
+
+---
 JAZYKY
 
 [LANG=cs] piš česky  
