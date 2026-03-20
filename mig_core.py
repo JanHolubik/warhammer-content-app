@@ -185,7 +185,8 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
 
         product_name = values.get("nazev_produktu", "")
         short_desc = values.get("strucny_popis_produktu", "")
-
+        
+        out[f"name:{lang}"] = product_name
         out[f"seoTitle:{lang}"] = f"{product_name} | AMMO by MIG" if product_name else ""
         out[f"xmlFeedName:{lang}"] = product_name
         out[f"metaDescription:{lang}"] = short_desc[:160] if short_desc else ""
@@ -201,5 +202,10 @@ def apply_mig_output_to_csv(df: pd.DataFrame, row_index: int, ai_output: str, te
         if col not in df_out.columns:
             df_out[col] = ""
         df_out.at[row_index, col] = value
+
+    df_out = df_out.drop(
+        columns=[c for c in ["name", "description", "shortDescription"] if c in df_out.columns],
+        errors="ignore"
+    )
 
     return df_out

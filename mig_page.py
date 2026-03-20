@@ -138,8 +138,14 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
             try:
                 df = pd.read_csv(uploaded_csv, sep=";", dtype=str).fillna("")
 
+                name_col = None
                 if "name" in df.columns:
-                    product_options = [f"{i} | {row['name']}" for i, row in df.iterrows()]
+                    name_col = "name"
+                elif "name:cs" in df.columns:
+                    name_col = "name:cs"
+
+                if name_col:
+                    product_options = [f"{i} | {row.get(name_col, '')}" for i, row in df.iterrows()]
                     selected = st.selectbox(
                         "Vyber produkt",
                         product_options,
@@ -147,13 +153,13 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     )
 
                     row_index = int(selected.split("|")[0].strip())
-                    product_name = df.iloc[row_index].get("name", "")
+                    product_name = df.iloc[row_index].get(name_col, "")
                     product_ean = df.iloc[row_index].get("ean", "")
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
                 else:
-                    st.error(f"CSV neobsahuje sloupec 'name'. Nalezené sloupce: {list(df.columns)}")
+                    st.error(f"CSV neobsahuje sloupec 'name' ani 'name:cs'. Nalezené sloupce: {list(df.columns)}")
 
             except Exception as e:
                 st.error(f"Nepodařilo se načíst CSV: {e}")
