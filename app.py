@@ -179,21 +179,29 @@ if st.session_state["selected_engine"] == "warhammer":
                     st.success("Scraper proběhl úspěšně.")
                     st.write("Počet produktů:", result["row_count"])
 
-                    main_csv_bytes = Path(result["output_csv"]).read_bytes()
+                    create_csv_bytes = Path(result["create_output_csv"]).read_bytes()
+                    source_csv_bytes = Path(result["source_output_csv"]).read_bytes()
 
-                    first_product_name = "shoptet_CREATE_CZ"
-                    if result.get("rows"):
-                        first_product_name = result["rows"][0].get("name:cs", "") or "shoptet_CREATE_CZ"
+                    first_product_name = "warhammer"
+                    if result.get("create_rows"):
+                        first_product_name = result["create_rows"][0].get("name", "") or "warhammer"
 
                     safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", first_product_name)
-                    file_name = f"{safe_name}_CREATE_CZ.csv"
 
                     st.download_button(
-                        label="Stáhnout hlavní CSV",
-                        data=main_csv_bytes,
-                        file_name=file_name,
+                        label="Stáhnout hlavní CREATE CSV",
+                        data=create_csv_bytes,
+                        file_name=f"{safe_name}_CREATE.csv",
                         mime="text/csv",
-                        key="download_main_scraper_csv",
+                        key="download_main_scraper_create_csv",
+                    )
+
+                    st.download_button(
+                        label="Stáhnout hlavní SOURCE CSV",
+                        data=source_csv_bytes,
+                        file_name=f"{safe_name}_SOURCE.csv",
+                        mime="text/csv",
+                        key="download_main_scraper_source_csv",
                     )
 
                     if result["split_files"]:
@@ -215,7 +223,7 @@ if st.session_state["selected_engine"] == "warhammer":
         st.header("Prompt")
 
         uploaded_split_csv = st.file_uploader(
-            "Nahraj produktové split CSV  - soubor co jsi vygeneroval v předchozím kroku - v záložce Scraper",
+            "Nahraj produktové SOURCE CSV - soubor co jsi vygeneroval v záložce Scraper",
             type=["csv"],
             key="prompt_uploaded_csv",
         )
@@ -261,7 +269,7 @@ if st.session_state["selected_engine"] == "warhammer":
 
         def generate_prompt(prompt_type: str) -> None:
             if uploaded_split_csv is None:
-                st.warning("Nejdřív nahraj produktové split CSV.")
+                st.warning("Nejdřív nahraj produktové SOURCE CSV.")
                 return
 
             try:
@@ -360,29 +368,8 @@ nazev_produktu:
 ...
 """,
         )
-        st.markdown("### Odkazy na obrázky a video")
 
-        intro_image_src = st.text_input("Hlavní obrázek", key="wh_intro_image_src")
-        img1_src = st.text_input("Obrázek 1", key="wh_img1_src")
-        img2_src = st.text_input("Obrázek 2", key="wh_img2_src")
-        img3_src = st.text_input("Obrázek 3", key="wh_img3_src")
-        img4_src = st.text_input("Obrázek 4", key="wh_img4_src")
-        video_url = st.text_input("Video URL", key="wh_video_url")
-
-        st.markdown("### Proklikávací odkazy")
-
-        link_1_label = st.text_input("Text odkazu 1", key="wh_link_1_label")
-        link_1_url = st.text_input("URL odkazu 1", key="wh_link_1_url")
-
-        link_2_label = st.text_input("Text odkazu 2", key="wh_link_2_label")
-        link_2_url = st.text_input("URL odkazu 2", key="wh_link_2_url")
-
-        link_3_label = st.text_input("Text odkazu 3", key="wh_link_3_label")
-        link_3_url = st.text_input("URL odkazu 3", key="wh_link_3_url")
-
-        link4_label = st.text_input("Text odkazu 4", key="wh_link_4_label")
-        link4_url = st.text_input("URL odkazu 4", key="wh_link_4_url")
-
+        
         if ai_output.strip():
             prompt_docx_bytes = make_docx_bytes(ai_output)
 
@@ -404,7 +391,7 @@ nazev_produktu:
         )
 
         uploaded_product_csv = st.file_uploader(
-            "Nahraj produktové split CSV - první soubor co jsi vygeneroval v záložce Scraper",
+            "Nahraj produktové SOURCE CSV - soubor co jsi vygeneroval v záložce Scraper",
             type=["csv"],
             key="fill_uploaded_csv",
         )
@@ -431,22 +418,77 @@ nazev_produktu:
 
         debug_mode = st.checkbox("Debug výpis", value=True, key="fill_debug_mode")
 
+        preview_row = None
+
         if uploaded_product_csv is not None:
             try:
                 df_preview = pd.read_csv(uploaded_product_csv, sep=";", dtype=str).fillna("")
                 if not df_preview.empty:
+                    preview_row = df_preview.iloc[0]
                     name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
-                    product_name_preview = df_preview.iloc[0].get(name_col, "")
-                    product_ean_preview = df_preview.iloc[0].get("ean", "")
+                    product_name_preview = preview_row.get(name_col, "")
+                    product_ean_preview = preview_row.get("ean", "")
                     st.info(f"Produkt: {product_name_preview}")
                     st.write(f"EAN: {product_ean_preview}")
             except Exception as e:
                 st.warning(f"Nepodařilo se načíst CSV: {e}")
 
+        st.markdown("### Odkazy na obrázky a video")
+
+        intro_image_src = st.text_input(
+            "Hlavní obrázek",
+            value=preview_row.get("image", "") if preview_row is not None else "",
+            key="fill_wh_intro_image_src",
+        )
+
+        img1_src = st.text_input(
+            "Obrázek 1",
+            value=preview_row.get("image2", "") if preview_row is not None else "",
+            key="fill_wh_img1_src",
+        )
+
+        img2_src = st.text_input(
+            "Obrázek 2",
+            value=preview_row.get("image3", "") if preview_row is not None else "",
+            key="fill_wh_img2_src",
+        )
+
+        img3_src = st.text_input(
+            "Obrázek 3",
+            value=preview_row.get("image4", "") if preview_row is not None else "",
+            key="fill_wh_img3_src",
+        )
+
+        img4_src = st.text_input(
+            "Obrázek 4",
+            value=preview_row.get("image5", "") if preview_row is not None else "",
+            key="fill_wh_img4_src",
+        )
+
+        video_url = st.text_input(
+            "Video URL",
+            value=preview_row.get("video_url", "") if preview_row is not None else "",
+            key="fill_wh_video_url",
+        )
+
+        st.markdown("### Proklikávací odkazy")
+
+        link_1_label = st.text_input("Text odkazu 1", key="fill_wh_link_1_label")
+        link_1_url = st.text_input("URL odkazu 1", key="fill_wh_link_1_url")
+
+        link_2_label = st.text_input("Text odkazu 2", key="fill_wh_link_2_label")
+        link_2_url = st.text_input("URL odkazu 2", key="fill_wh_link_2_url")
+
+        link_3_label = st.text_input("Text odkazu 3", key="fill_wh_link_3_label")
+        link_3_url = st.text_input("URL odkazu 3", key="fill_wh_link_3_url")
+
+        link_4_label = st.text_input("Text odkazu 4", key="fill_wh_link_4_label")
+        link_4_url = st.text_input("URL odkazu 4", key="fill_wh_link_4_url")
+
         if st.button("Spustit fill", key="fill_run_button"):
             try:
                 if uploaded_product_csv is None:
-                    st.error("Nahraj produktové split CSV.")
+                    st.error("Nahraj produktové SOURCE CSV.")
                 elif uploaded_prompt_docx is None:
                     st.error("Nahraj vystup_prompt.docx.")
                 else:
@@ -459,6 +501,24 @@ nazev_produktu:
                     temp_create_output = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
                     temp_create_output.close()
 
+                    extra_values = {
+                        "intro_image_src": intro_image_src.strip(),
+                        "img1_src": img1_src.strip(),
+                        "img2_src": img2_src.strip(),
+                        "img3_src": img3_src.strip(),
+                        "img4_src": img4_src.strip(),
+                        "video_url": video_url.strip(),
+                        "link_1_label": link_1_label.strip(),
+                        "link_1_url": link_1_url.strip(),
+                        "link_2_label": link_2_label.strip(),
+                        "link_2_url": link_2_url.strip(),
+                        "link_3_label": link_3_label.strip(),
+                        "link_3_url": link_3_url.strip(),
+                        "link_4_label": link_4_label.strip(),
+                        "link_4_url": link_4_url.strip(),
+                    }
+                    extra_values = {k: v for k, v in extra_values.items() if v}
+
                     result = run_filler(
                         template_type=template_type,
                         csv_path=temp_csv_path,
@@ -469,6 +529,7 @@ nazev_produktu:
                         target_product_name=target_product_name or None,
                         target_ean=target_ean or None,
                         debug=debug_mode,
+                        extra_values=extra_values,
                     )
 
                     st.success("Fill proběhl úspěšně.")

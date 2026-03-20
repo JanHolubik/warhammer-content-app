@@ -178,7 +178,6 @@ def parse_key_value_block(text: str) -> Dict[str, str]:
             possible_key, possible_value = line.split(":", 1)
             possible_key_clean = canonical_key(possible_key)
 
-            # nový klíč jen pokud vlevo opravdu něco rozumného je
             if possible_key_clean:
                 if current_key is not None:
                     result[current_key] = normalize_docx_text("\n".join(current_value_lines).strip())
@@ -194,6 +193,7 @@ def parse_key_value_block(text: str) -> Dict[str, str]:
         result[current_key] = normalize_docx_text("\n".join(current_value_lines).strip())
 
     return result
+
 
 def parse_prompt_output_by_lang(text: str) -> Dict[str, Dict[str, str]]:
     text = normalize_docx_text(text).strip()
@@ -383,6 +383,7 @@ def apply_aliases(values: Dict[str, str], template_type: str) -> Dict[str, str]:
         for src, dst in mini_aliases.items():
             if src in out and dst not in out:
                 out[dst] = out[src]
+
         if "section_inside_title" in out and "sekce_o_jednotce_nadpis" not in out:
             out["sekce_o_jednotce_nadpis"] = out["section_inside_title"]
 
@@ -414,9 +415,11 @@ def is_multiline_text_placeholder(placeholder_name: str) -> bool:
         "img1_src",
         "img2_src",
         "img3_src",
+        "img4_src",
         "img1_alt",
         "img2_alt",
         "img3_alt",
+        "img4_alt",
         "primer_color",
         "main_color_1_color",
         "main_color_2_color",
@@ -433,6 +436,10 @@ def is_multiline_text_placeholder(placeholder_name: str) -> bool:
         "nazev_sady",
         "nazev_produktu",
         "product_title",
+        "link_1_url",
+        "link_2_url",
+        "link_3_url",
+        "link_4_url",
     }
 
     if name in exact_no_br:
@@ -476,8 +483,17 @@ def inject_safe_defaults(values: Dict[str, str], product_name: str) -> Dict[str,
         "img1_src": "img_src",
         "img2_src": "img_src",
         "img3_src": "img_src",
+        "img4_src": "img_src",
         "intro_image_src": "img_src",
         "video_url": "https://www.youtube.com/embed/",
+        "link_1_label": "",
+        "link_1_url": "",
+        "link_2_label": "",
+        "link_2_url": "",
+        "link_3_label": "",
+        "link_3_url": "",
+        "link_4_label": "",
+        "link_4_url": "",
     }
 
     for key, value in defaults.items():
@@ -485,7 +501,7 @@ def inject_safe_defaults(values: Dict[str, str], product_name: str) -> Dict[str,
         if not str(out.get(ck, "")).strip():
             out[ck] = value
 
-    for key in ("img1_alt", "img2_alt", "img3_alt"):
+    for key in ("img1_alt", "img2_alt", "img3_alt", "img4_alt"):
         ck = canonical_key(key)
         if not str(out.get(ck, "")).strip():
             out[ck] = product_name
@@ -571,11 +587,30 @@ def build_csv_row_mask(
     return df.index == 0
 
 
+def ensure_output_columns(df: pd.DataFrame) -> pd.DataFrame:
+    required_cols = [
+        "name:cs", "name:en", "name:sk",
+        "shortDescription:cs", "shortDescription:en", "shortDescription:sk",
+        "description:cs", "description:en", "description:sk",
+    ]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = ""
+    return df
+
+
 def build_create_csv(source_row: pd.Series, final_name_cs: str, final_detail_html_cs: str) -> pd.DataFrame:
-    required = ["code", "pairCode", "price"]
-    for col in required:
-        if col not in source_row.index:
-            raise ValueError(f"V původním CSV chybí sloupec '{col}' pro create CSV.")
+    create_columns = [
+        "code",
+        "pairCode",
+        "name",
+        "price",
+        "description",
+        "image", "image2", "image3", "image4", "image5",
+        "image6", "image7", "image8", "image9", "image10",
+        "image11", "image12", "image13", "image14", "image15",
+        "image16", "image17", "image18", "image19", "image20",
+    ]
 
     create_data = {
         "code": [str(source_row.get("code", "")).strip()],
@@ -585,9 +620,10 @@ def build_create_csv(source_row: pd.Series, final_name_cs: str, final_detail_htm
         "description": [str(final_detail_html_cs).strip()],
     }
 
-    return pd.DataFrame(create_data, columns=[
-        "code", "pairCode", "name", "price", "description"
-    ])
+    for col in create_columns[5:]:
+        create_data[col] = [str(source_row.get(col, "")).strip()]
+
+    return pd.DataFrame(create_data, columns=create_columns)
 
 
 # =========================
@@ -604,6 +640,7 @@ def run_filler(
     target_product_name: Optional[str] = None,
     target_ean: Optional[str] = None,
     debug: bool = True,
+    extra_values: Optional[Dict[str, str]] = None,
 ) -> Dict[str, object]:
     template_type = template_type.strip().lower()
     csv_path = Path(csv_path).expanduser()
@@ -613,16 +650,8 @@ def run_filler(
     output_create_csv_path = Path(output_create_csv_path).expanduser()
 
     template_paths = get_template_paths(template_dir, template_type)
-
     df = pd.read_csv(csv_path, sep=";", dtype=str).fillna("")
-
-    required_columns = [
-        "shortDescription:cs", "shortDescription:en", "shortDescription:sk",
-        "description:cs", "description:en", "description:sk",
-    ]
-    for col in required_columns:
-        if col not in df.columns:
-            raise ValueError(f"V CSV souboru chybí sloupec '{col}'.")
+    df = ensure_output_columns(df)
 
     mask = build_csv_row_mask(df, target_product_name=target_product_name, target_ean=target_ean)
     matched_rows = df.loc[mask]
@@ -632,7 +661,7 @@ def run_filler(
 
     source_row = matched_rows.iloc[0]
 
-    name_col = "name:cs" if "name:cs" in df.columns else "name"
+    name_col = "name:cs" if "name:cs" in df.columns and str(source_row.get("name:cs", "")).strip() else "name"
     product_name = str(source_row.get(name_col, "")).strip()
 
     short_template_cs = read_docx_text(template_paths["short_cs"])
@@ -649,42 +678,17 @@ def run_filler(
     prompt_output_text = read_docx_text(prompt_output_docx_path)
     values_by_lang = parse_prompt_output_by_lang(prompt_output_text)
 
+    if extra_values:
+        normalized_extra = {canonical_key(k): normalize_docx_text(v).strip() for k, v in extra_values.items()}
+        for lang in ("cs", "en", "sk"):
+            values_by_lang[lang].update(normalized_extra)
+
     for lang in ("cs", "en", "sk"):
         if "sekce_o_jednotce_nadpis" not in values_by_lang[lang] and "section_inside_title" in values_by_lang[lang]:
             values_by_lang[lang]["sekce_o_jednotce_nadpis"] = values_by_lang[lang]["section_inside_title"]
 
         if "sekce_o_jednotce_text" not in values_by_lang[lang] and "section_inside_text" in values_by_lang[lang]:
             values_by_lang[lang]["sekce_o_jednotce_text"] = values_by_lang[lang]["section_inside_text"]
-
-    if "sekce_o_jednotce_nadpis" not in values_by_lang["cs"]:
-        raise ValueError(
-            "Parser nenačetl 'sekce_o_jednotce_nadpis'. "
-            f"Načtené CS klíče: {sorted(values_by_lang['cs'].keys())}"
-        )
-
-    if debug:
-        cs_keys = sorted(values_by_lang["cs"].keys())
-        print("KEYS CS:", cs_keys)
-        print("VALUE sekce_o_jednotce_nadpis:", repr(values_by_lang["cs"].get("sekce_o_jednotce_nadpis")))
-        print("VALUE sekce_o_jednotce_text:", repr(values_by_lang["cs"].get("sekce_o_jednotce_text")))
-
-    if debug:
-        print("PROMPT FILE:", prompt_output_docx_path)
-        print("DETAIL FILE:", template_paths["detail_cs"])
-        print()
-
-        print("OBSAHUJE SABLONA sekce_o_jednotce_nadpis?:", "{sekce_o_jednotce_nadpis}" in detail_template_cs)
-        print("OBSAHUJE SABLONA section_inside_title?:", "{section_inside_title}" in detail_template_cs)
-        print()
-
-        print("KLICE CS PRED ALIASY:")
-        for k in sorted(values_by_lang["cs"].keys()):
-            print("-", repr(k))
-        print()
-
-        print("CS sekce_o_jednotce_nadpis PRED ALIASY =", repr(values_by_lang["cs"].get("sekce_o_jednotce_nadpis")))
-        print("CS section_inside_title PRED ALIASY =", repr(values_by_lang["cs"].get("section_inside_title")))
-        print()
 
     for lang in ("cs", "en", "sk"):
         current_product_name = product_name
@@ -695,18 +699,11 @@ def run_filler(
         values_by_lang[lang] = apply_aliases(values_by_lang[lang], template_type)
 
     if debug:
-        print("CS sekce_o_jednotce_nadpis PO ALIASECH =", repr(values_by_lang["cs"].get("sekce_o_jednotce_nadpis")))
-        print("CS section_inside_title PO ALIASECH =", repr(values_by_lang["cs"].get("section_inside_title")))
+        print("PROMPT FILE:", prompt_output_docx_path)
+        print("DETAIL FILE:", template_paths["detail_cs"])
         print()
-
         print_placeholder_summary("KRÁTKÁ ŠABLONA CS", short_placeholders_cs, values_by_lang["cs"])
         print_placeholder_summary("DETAILNÍ ŠABLONA CS", detail_placeholders_cs, values_by_lang["cs"])
-    
-    if debug and "sekce_o_jednotce_nadpis" not in values_by_lang["cs"]:
-        raise ValueError(
-            "Parser nenačetl 'sekce_o_jednotce_nadpis'. "
-            f"Načtené CS klíče: {sorted(values_by_lang['cs'].keys())}"
-        )
 
     final_short_html_cs = flatten_html_for_csv(
         fill_template(short_template_cs, values_by_lang["cs"], strict=True)
@@ -738,17 +735,20 @@ def run_filler(
 
     name_key = canonical_key("nazev_produktu")
 
-    final_name_cs = str(source_row.get("name:cs", "")).strip()
+    final_name_cs = str(source_row.get("name:cs", "") or source_row.get("name", "")).strip()
     if values_by_lang["cs"].get(name_key, "").strip():
         final_name_cs = values_by_lang["cs"][name_key]
-        if "name:cs" in df.columns:
-            df.loc[mask, "name:cs"] = final_name_cs
+    df.loc[mask, "name:cs"] = final_name_cs
 
-    if "name:en" in df.columns and values_by_lang["en"].get(name_key, "").strip():
-        df.loc[mask, "name:en"] = values_by_lang["en"][name_key]
+    final_name_en = str(source_row.get("name:en", "") or source_row.get("name", "")).strip()
+    if values_by_lang["en"].get(name_key, "").strip():
+        final_name_en = values_by_lang["en"][name_key]
+    df.loc[mask, "name:en"] = final_name_en
 
-    if "name:sk" in df.columns and values_by_lang["sk"].get(name_key, "").strip():
-        df.loc[mask, "name:sk"] = values_by_lang["sk"][name_key]
+    final_name_sk = str(source_row.get("name:sk", "") or source_row.get("name", "")).strip()
+    if values_by_lang["sk"].get(name_key, "").strip():
+        final_name_sk = values_by_lang["sk"][name_key]
+    df.loc[mask, "name:sk"] = final_name_sk
 
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     output_create_csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -761,8 +761,15 @@ def run_filler(
         quoting=csv.QUOTE_ALL
     )
 
+    create_source_row = source_row.copy()
+    create_source_row["image"] = extra_values.get("intro_image_src", source_row.get("image", "")) if extra_values else source_row.get("image", "")
+    create_source_row["image2"] = extra_values.get("img1_src", source_row.get("image2", "")) if extra_values else source_row.get("image2", "")
+    create_source_row["image3"] = extra_values.get("img2_src", source_row.get("image3", "")) if extra_values else source_row.get("image3", "")
+    create_source_row["image4"] = extra_values.get("img3_src", source_row.get("image4", "")) if extra_values else source_row.get("image4", "")
+    create_source_row["image5"] = extra_values.get("img4_src", source_row.get("image5", "")) if extra_values else source_row.get("image5", "")
+
     create_df = build_create_csv(
-        source_row=source_row,
+        source_row=create_source_row,
         final_name_cs=final_name_cs,
         final_detail_html_cs=final_detail_html_cs,
     )
@@ -800,9 +807,9 @@ def run_filler(
 
 def main() -> None:
     template_type = "miniatures"
-    csv_path = "/Users/janholubik/Downloads/shoptet_split/miniatures/08_Blood_Bowl_High_Elf_Blood_Bowl_Team_The_Caledor_Dragons_5011921248391.csv"
+    csv_path = "/Users/janholubik/Downloads/example_SOURCE.csv"
     template_dir = "/Users/janholubik/Downloads/XML/XML_plastic/sablony"
-    prompt_output_docx_path = "/Users/janholubik/Downloads/shoptet_split/vystup_prompt.docx"
+    prompt_output_docx_path = "/Users/janholubik/Downloads/vystup_prompt.docx"
     output_csv_path = "/Users/janholubik/Downloads/0_FILLED.csv"
     output_create_csv_path = "/Users/janholubik/Downloads/0_CREATE.csv"
 
@@ -816,6 +823,7 @@ def main() -> None:
         target_product_name=None,
         target_ean=None,
         debug=True,
+        extra_values=None,
     )
 
 
