@@ -148,7 +148,7 @@ def replace_placeholders_in_docx(template_path: Path, values: dict) -> str:
     return "\n".join(html_lines)
 
 
-def build_mig_html(ai_output: str, template_kind: str) -> dict:
+def build_mig_html(ai_output: str, template_kind: str, extra_values: dict | None = None) -> dict:
     lang_blocks = parse_ai_output_to_lang_blocks(ai_output)
 
     if template_kind == "mig_paints":
@@ -180,22 +180,22 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
 
     for lang in ["cs", "en", "sk"]:
         values = parse_key_value_block(lang_blocks.get(lang, ""))
+
+        if extra_values:
+            values.update(extra_values)
+
         out[f"shortDescription:{lang}"] = replace_placeholders_in_docx(short_files[lang], values)
         out[f"description:{lang}"] = replace_placeholders_in_docx(long_files[lang], values)
 
         product_name = values.get("nazev_produktu", "")
         short_desc = values.get("strucny_popis_produktu", "")
 
-        # odstranění duplicitního názvu na začátku
-        if short_desc.lower().startswith(product_name.lower()):
-            short_desc = short_desc[len(product_name):].strip()
-        
         if product_name and short_desc.lower().startswith(product_name.lower()):
             short_desc = short_desc[len(product_name):].strip(" -–—,:;")
 
         final_short = f"{product_name} {short_desc}".strip()
         final_short = final_short.replace("\n", " ").replace("\r", " ")
-        
+
         out[f"name:{lang}"] = product_name
         out[f"seoTitle:{lang}"] = f"{product_name} | AMMO by MIG" if product_name else ""
         out[f"xmlFeedName:{lang}"] = product_name
@@ -211,11 +211,7 @@ def apply_mig_output_to_csv(
     template_kind: str,
     extra_values: dict | None = None,
 ) -> pd.DataFrame:
-    html_map = build_mig_html(ai_output, template_kind)
-
-    if extra_values:
-        html_map.update(extra_values)
-
+    html_map = build_mig_html(ai_output, template_kind, extra_values=extra_values)
     df_out = df.copy()
 
     for col, value in html_map.items():

@@ -41,6 +41,21 @@ if "create_csv_bytes" not in st.session_state:
 if "fill_product_name" not in st.session_state:
     st.session_state["fill_product_name"] = ""
 
+if "scraper_create_csv_bytes" not in st.session_state:
+    st.session_state["scraper_create_csv_bytes"] = None
+
+if "scraper_source_csv_bytes" not in st.session_state:
+    st.session_state["scraper_source_csv_bytes"] = None
+
+if "scraper_split_files" not in st.session_state:
+    st.session_state["scraper_split_files"] = []
+
+if "scraper_row_count" not in st.session_state:
+    st.session_state["scraper_row_count"] = 0
+
+if "scraper_first_product_name" not in st.session_state:
+    st.session_state["scraper_first_product_name"] = "warhammer"
+
 st.markdown("""
 <style>
 button[data-baseweb="tab"] {
@@ -176,9 +191,6 @@ if st.session_state["selected_engine"] == "warhammer":
                         verbose=verbose_mode,
                     )
 
-                    st.success("Scraper proběhl úspěšně.")
-                    st.write("Počet produktů:", result["row_count"])
-
                     create_csv_bytes = Path(result["create_output_csv"]).read_bytes()
                     source_csv_bytes = Path(result["source_output_csv"]).read_bytes()
 
@@ -186,38 +198,62 @@ if st.session_state["selected_engine"] == "warhammer":
                     if result.get("create_rows"):
                         first_product_name = result["create_rows"][0].get("name", "") or "warhammer"
 
-                    safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", first_product_name)
+                    st.session_state["scraper_create_csv_bytes"] = create_csv_bytes
+                    st.session_state["scraper_source_csv_bytes"] = source_csv_bytes
+                    st.session_state["scraper_split_files"] = result.get("split_files", [])
+                    st.session_state["scraper_row_count"] = result["row_count"]
+                    st.session_state["scraper_first_product_name"] = first_product_name
 
-                    st.download_button(
-                        label="Stáhnout hlavní CREATE CSV",
-                        data=create_csv_bytes,
-                        file_name=f"{safe_name}_CREATE.csv",
-                        mime="text/csv",
-                        key="download_main_scraper_create_csv",
-                    )
-
-                    st.download_button(
-                        label="Stáhnout hlavní SOURCE CSV",
-                        data=source_csv_bytes,
-                        file_name=f"{safe_name}_SOURCE.csv",
-                        mime="text/csv",
-                        key="download_main_scraper_source_csv",
-                    )
-
-                    if result["split_files"]:
-                        st.subheader("Vygenerované split CSV soubory")
-                        for file_path in result["split_files"][:50]:
-                            p = Path(file_path)
-                            st.download_button(
-                                label=f"Stáhnout {p.name}",
-                                data=p.read_bytes(),
-                                file_name=p.name,
-                                mime="text/csv",
-                                key=f"download_split_{p.name}",
-                            )
+                    st.success("Scraper proběhl úspěšně.")
 
             except Exception as e:
                 st.error(f"Chyba při scrapování: {e}")
+
+        if st.session_state["scraper_create_csv_bytes"] is not None:
+            safe_name = re.sub(
+                r"[^a-zA-Z0-9_-]",
+                "_",
+                st.session_state["scraper_first_product_name"]
+            )
+
+            st.success("Scraper proběhl úspěšně.")
+            st.write("Počet produktů:", st.session_state["scraper_row_count"])
+
+            st.download_button(
+                label="Stáhnout hlavní CREATE CSV",
+                data=st.session_state["scraper_create_csv_bytes"],
+                file_name=f"{safe_name}_CREATE.csv",
+                mime="text/csv",
+                key="download_main_scraper_create_csv_persistent",
+            )
+
+            st.download_button(
+                label="Stáhnout hlavní SOURCE CSV",
+                data=st.session_state["scraper_source_csv_bytes"],
+                file_name=f"{safe_name}_SOURCE.csv",
+                mime="text/csv",
+                key="download_main_scraper_source_csv_persistent",
+            )
+
+            if st.session_state["scraper_split_files"]:
+                st.subheader("Vygenerované split CSV soubory")
+                for i, file_path in enumerate(st.session_state["scraper_split_files"][:50]):
+                    p = Path(file_path)
+                    st.download_button(
+                        label=f"Stáhnout {p.name}",
+                        data=p.read_bytes(),
+                        file_name=p.name,
+                        mime="text/csv",
+                        key=f"download_split_persistent_{i}_{p.name}",
+                    )
+
+            if st.button("Vymazat výstupy scraperu", key="clear_scraper_outputs"):
+                st.session_state["scraper_create_csv_bytes"] = None
+                st.session_state["scraper_source_csv_bytes"] = None
+                st.session_state["scraper_split_files"] = []
+                st.session_state["scraper_row_count"] = 0
+                st.session_state["scraper_first_product_name"] = "warhammer"
+                st.rerun()
 
     with tab2:
         st.header("Prompt")
@@ -369,7 +405,6 @@ nazev_produktu:
 """,
         )
 
-        
         if ai_output.strip():
             prompt_docx_bytes = make_docx_bytes(ai_output)
 
