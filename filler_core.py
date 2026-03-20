@@ -750,6 +750,10 @@ def run_filler(
         final_name_sk = values_by_lang["sk"][name_key]
     df.loc[mask, "name:sk"] = final_name_sk
 
+    for col in ["name", "xmlFeedName", "seoTitle"]:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     output_create_csv_path.parent.mkdir(parents=True, exist_ok=True)
 

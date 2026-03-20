@@ -454,6 +454,8 @@ nazev_produktu:
         debug_mode = st.checkbox("Debug výpis", value=True, key="fill_debug_mode")
 
         preview_row = None
+        product_name_preview = ""
+        product_ean_preview = ""
 
         if uploaded_product_csv is not None:
             try:
@@ -508,17 +510,51 @@ nazev_produktu:
 
         st.markdown("### Proklikávací odkazy")
 
-        link_1_label = st.text_input("Text odkazu 1", key="fill_wh_link_1_label")
-        link_1_url = st.text_input("URL odkazu 1", key="fill_wh_link_1_url")
+        default_link_label = product_name_preview if preview_row is not None else ""
 
-        link_2_label = st.text_input("Text odkazu 2", key="fill_wh_link_2_label")
-        link_2_url = st.text_input("URL odkazu 2", key="fill_wh_link_2_url")
+        link_1_label = st.text_input(
+            "Text odkazu 1",
+            value=default_link_label,
+            key="fill_wh_link_1_label"
+        )
+        link_1_url = st.text_input(
+            "URL odkazu 1",
+            value=img1_src,
+            key="fill_wh_link_1_url"
+        )
 
-        link_3_label = st.text_input("Text odkazu 3", key="fill_wh_link_3_label")
-        link_3_url = st.text_input("URL odkazu 3", key="fill_wh_link_3_url")
+        link_2_label = st.text_input(
+            "Text odkazu 2",
+            value=default_link_label,
+            key="fill_wh_link_2_label"
+        )
+        link_2_url = st.text_input(
+            "URL odkazu 2",
+            value=img2_src,
+            key="fill_wh_link_2_url"
+        )
 
-        link_4_label = st.text_input("Text odkazu 4", key="fill_wh_link_4_label")
-        link_4_url = st.text_input("URL odkazu 4", key="fill_wh_link_4_url")
+        link_3_label = st.text_input(
+            "Text odkazu 3",
+            value=default_link_label,
+            key="fill_wh_link_3_label"
+        )
+        link_3_url = st.text_input(
+            "URL odkazu 3",
+            value=img3_src,
+            key="fill_wh_link_3_url"
+        )
+
+        link_4_label = st.text_input(
+            "Text odkazu 4",
+            value=default_link_label,
+            key="fill_wh_link_4_label"
+        )
+        link_4_url = st.text_input(
+            "URL odkazu 4",
+            value=img4_src,
+            key="fill_wh_link_4_url"
+        )
 
         if st.button("Spustit fill", key="fill_run_button"):
             try:
