@@ -19,12 +19,26 @@ from docx import Document
 # =========================
 # OUTPUT COLUMNS
 # =========================
-OUTPUT_COLUMNS = [
-    "code", "pairCode",
-    "name:cs", "name:en", "name:sk",
-    "shortDescription:cs", "shortDescription:en", "shortDescription:sk",
-    "description:cs", "description:en", "description:sk",
-    "price", "priceWithoutVat",
+CREATE_COLUMNS = [
+    "code",
+    "pairCode",
+    "name",
+    "price",
+    "description",
+    "image", "image2", "image3", "image4", "image5",
+    "image6", "image7", "image8", "image9", "image10",
+    "image11", "image12", "image13", "image14", "image15",
+    "image16", "image17", "image18", "image19", "image20",
+]
+
+SOURCE_COLUMNS = [
+    "code",
+    "pairCode",
+    "name",
+    "ean",
+    "externalCode",
+    "price",
+    "priceWithoutVat",
     "standardPrice",
     "categoryText",
     "warranty",
@@ -33,11 +47,23 @@ OUTPUT_COLUMNS = [
     "heurekaCategoryId",
     "zboziCategoryId",
     "googleCategoryId",
-    "image", "image2", "image3", "image4", "image5", "image6", "image7", "image8", "image9", "image10",
-    "image11", "image12", "image13", "image14", "image15", "image16", "image17", "image18", "image19", "image20",
-    "stock", "percentVat", "ossTaxRate:CZ", "availabilityInStock", "availabilityOutOfStock",
-    "ean", "externalCode", "productVisibility",
-    "xmlFeedName:cs", "seoTitle:cs",
+    "stock",
+    "percentVat",
+    "ossTaxRate:CZ",
+    "availabilityInStock",
+    "availabilityOutOfStock",
+    "productVisibility",
+    "xmlFeedName",
+    "seoTitle",
+    "system",
+    "faction",
+    "productType",
+    "hp_url",
+    "gw_url",
+    "image", "image2", "image3", "image4", "image5",
+    "image6", "image7", "image8", "image9", "image10",
+    "image11", "image12", "image13", "image14", "image15",
+    "image16", "image17", "image18", "image19", "image20",
 ]
 
 BASE_HEADERS = {
@@ -686,11 +712,9 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             path = str(u).lower()
             netloc = ""
 
-        # nechceme 360 obrázky, pokud nejsou povolené
         if (not keep_360) and ("threesixty" in path or "360" in path):
             continue
 
-        # povol různé GW/CDN cesty, nejen jednu historickou
         allowed = (
             "warhammer.com" in netloc
             or "games-workshop.com" in netloc
@@ -701,7 +725,6 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             or "/resources/catalog/product/" in path
         )
 
-        # zároveň musí aspoň trochu vypadat jako obrázek
         looks_like_image = any(ext in path for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"])
 
         if allowed or looks_like_image:
@@ -822,16 +845,13 @@ def scrape_gw_images_fallback_simple(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) meta obrázky
     for meta in soup.select('meta[property="og:image"], meta[name="twitter:image"]'):
         u = (meta.get("content") or "").strip()
         if u:
             urls.append(abs_url(gw_url, u))
 
-    # 2) img + source
     urls.extend(extract_imgs_from_node(soup, gw_url))
 
-    # 3) jakékoliv raw url v html, které vypadají jako obrázky
     raw_matches = re.findall(r'https://[^"\']+\.(?:jpg|jpeg|png|webp|avif)[^"\']*', html, flags=re.I)
     urls.extend(raw_matches)
 
@@ -984,7 +1004,8 @@ def run_scraper(
     links = load_links(input_links)
     tpl = load_templates_multi_from_dir(tpl_dir)
 
-    out_rows: List[Dict[str, str]] = []
+    create_rows: List[Dict[str, str]] = []
+    source_rows: List[Dict[str, str]] = []
     processed_files: List[str] = []
 
     split_dir = Path(split_out_dir).expanduser() if split_out_dir else None
@@ -1101,19 +1122,22 @@ def run_scraper(
 
         code = ean if ean else ""
 
-        row: Dict[str, str] = {c: "" for c in OUTPUT_COLUMNS}
-        row.update({
+        create_row: Dict[str, str] = {c: "" for c in CREATE_COLUMNS}
+        create_row.update({
             "code": code,
             "pairCode": "",
-            "name:cs": name_final,
-            "name:en": name_final,
-            "name:sk": name_final,
-            "shortDescription:cs": short_cs,
-            "shortDescription:en": short_en,
-            "shortDescription:sk": short_sk,
-            "description:cs": detail_cs,
-            "description:en": detail_en,
-            "description:sk": detail_sk,
+            "name": name_final,
+            "price": f"{price:.2f}".replace(".", ","),
+            "description": "",
+        })
+
+        source_row: Dict[str, str] = {c: "" for c in SOURCE_COLUMNS}
+        source_row.update({
+            "code": code,
+            "pairCode": "",
+            "name": name_final,
+            "ean": ean,
+            "externalCode": external,
             "price": f"{price:.2f}".replace(".", ","),
             "priceWithoutVat": f"{price_without_vat(price, float(vat)):.2f}".replace(".", ","),
             "standardPrice": f"{std_price:.2f}".replace(".", ",") if std_price is not None else "",
@@ -1129,19 +1153,27 @@ def run_scraper(
             "ossTaxRate:CZ": str(oss_tax_rate_cz),
             "availabilityInStock": str(availability_in_stock),
             "availabilityOutOfStock": str(availability_out_of_stock),
-            "ean": ean,
-            "externalCode": external,
             "productVisibility": str(product_visibility),
-            "xmlFeedName:cs": xml_feed_name,
-            "seoTitle:cs": seo_title,
+            "xmlFeedName": xml_feed_name,
+            "seoTitle": seo_title,
+            "system": _system,
+            "faction": faction,
+            "productType": ptype,
+            "hp_url": hp_url,
+            "gw_url": gw_final if gw_url else "",
         })
 
         if images:
-            row["image"] = images[0]
-            for idx_img in range(1, min(20, len(images))):
-                row[f"image{idx_img + 1}"] = images[idx_img]
+            create_row["image"] = images[0]
+            source_row["image"] = images[0]
 
-        out_rows.append(row)
+            for idx_img in range(1, min(20, len(images))):
+                col = f"image{idx_img + 1}"
+                create_row[col] = images[idx_img]
+                source_row[col] = images[idx_img]
+
+        create_rows.append(create_row)
+        source_rows.append(source_row)
 
         if split_dir:
             safe_name = slugify_filename(name_final)
@@ -1168,24 +1200,40 @@ def run_scraper(
                 out_folder = split_dir / ptype
                 out_folder.mkdir(parents=True, exist_ok=True)
 
-            out_path = out_folder / f"{base_name}.csv"
-            save_single_row_csv(row, OUTPUT_COLUMNS, out_path)
-            processed_files.append(str(out_path))
+            create_out_path = out_folder / f"{base_name}_CREATE.csv"
+            source_out_path = out_folder / f"{base_name}_SOURCE.csv"
 
-    out_df = pd.DataFrame(out_rows, columns=OUTPUT_COLUMNS)
-    out_df = out_df.reindex(columns=OUTPUT_COLUMNS, fill_value="")
+            save_single_row_csv(create_row, CREATE_COLUMNS, create_out_path)
+            save_single_row_csv(source_row, SOURCE_COLUMNS, source_out_path)
+
+            processed_files.append(str(create_out_path))
+            processed_files.append(str(source_out_path))
+
     output_path = Path(output).expanduser()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    out_df.to_csv(output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
 
-    print(f"\nOK: saved {output_path} ({len(out_df)} rows)")
+    create_output_path = output_path.with_name(f"{output_path.stem}_CREATE{output_path.suffix}")
+    source_output_path = output_path.with_name(f"{output_path.stem}_SOURCE{output_path.suffix}")
+
+    create_df = pd.DataFrame(create_rows, columns=CREATE_COLUMNS)
+    create_df = create_df.reindex(columns=CREATE_COLUMNS, fill_value="")
+    create_df.to_csv(create_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
+
+    source_df = pd.DataFrame(source_rows, columns=SOURCE_COLUMNS)
+    source_df = source_df.reindex(columns=SOURCE_COLUMNS, fill_value="")
+    source_df.to_csv(source_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
+
+    print(f"\nOK: saved CREATE {create_output_path} ({len(create_df)} rows)")
+    print(f"OK: saved SOURCE {source_output_path} ({len(source_df)} rows)")
     if split_dir:
-        print(f"OK: saved split CSVs to {split_dir} ({len(out_rows)} files)")
+        print(f"OK: saved split CSVs to {split_dir} ({len(processed_files)} files)")
 
     return {
-        "output_csv": str(output_path),
+        "create_output_csv": str(create_output_path),
+        "source_output_csv": str(source_output_path),
         "split_dir": str(split_dir) if split_dir else "",
-        "row_count": len(out_df),
-        "rows": out_rows,
+        "row_count": len(create_df),
+        "create_rows": create_rows,
+        "source_rows": source_rows,
         "split_files": processed_files,
     }
