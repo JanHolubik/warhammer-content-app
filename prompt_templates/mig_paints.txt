@@ -14,22 +14,20 @@ prodejní, ale věcný
 praktický pro modeláře
 vhodný pro e-shop
 
-Zákazník musí pochopit:
-co to je za barvu
+Zákazník musí rychle pochopit:
+co je to za barvu
 na co se používá
-jaký má efekt (matná, lesklá, wash, pigment…)
+jaký má efekt nebo charakter
+proč se hodí do výbavy modeláře
 s čím ji kombinovat
-proč je lepší než běžné barvy
+jakou má výhodu při práci
 
 Text NESMÍ působit:
 genericky
 technicky
 roboticky
 
----
-
 TVRDÝ LOCK – BEZ VÝJIMEK
-
 Nikdy negeneruj HTML
 Nikdy negeneruj CSS
 Nikdy nepoužívej HTML tagy
@@ -40,16 +38,11 @@ Každý klíč musí být vyplněn
 Každý klíč vrať pouze jednou
 Pořadí klíčů je závazné
 
----
-
 VSTUP
 name: {PRODUCT_NAME}
 ean: {EAN}
 
----
-
 FORMÁT VÝSTUPU
-
 [LANG=cs]
 ...
 
@@ -61,20 +54,43 @@ FORMÁT VÝSTUPU
 
 Každý blok musí obsahovat stejné klíče ve stejném pořadí.
 
----
-
 JAZYKY
+[LANG=cs]
+piš česky
 
-[LANG=cs] piš česky  
-[LANG=en] piš přirozenou angličtinou  
-[LANG=sk] piš přirozenou slovenštinou  
+[LANG=en]
+piš přirozenou angličtinou
+
+[LANG=sk]
+piš přirozenou slovenštinou
 
 placeholdery zůstávají česky
 
----
+KRITICKÉ PRAVIDLO PRO KRÁTKÝ POPIS
+Pole strucny_popis_produktu NESMÍ začínat názvem produktu.
+Název produktu bude doplněn systémem zvlášť.
+Začni rovnou typem produktu, použitím nebo hlavním benefitem.
+
+PRAVIDLO PRO STYL KRÁTKÉHO POPISU
+strucny_popis_produktu musí být:
+1 až 2 věty
+stručný
+prodejní
+přirozený
+bez opakování názvu produktu
+bez zbytečné vaty
+
+Doporučená struktura strucny_popis_produktu:
+typ produktu + použití + hlavní benefit
+
+Příklad stylu:
+Akrylová modelářská barva v 20ml lahvičce, ideální pro štětec i airbrush. Rychle schne a zanechává hladký povrch.
+
+PRAVIDLO PRO PODROBNĚJŠÍ POPIS
+podrobnejsi_popis_produktu má být delší, konkrétnější a praktičtější.
+Může vysvětlit charakter odstínu, chování při aplikaci, vhodné použití a přínos pro modeláře.
 
 ŠABLONA
-
 nazev_produktu:
 typ_produktu:
 doporucene_pouziti:
@@ -105,22 +121,18 @@ doporucene_prislusenstvi:
 
 obrazek:
 
----
-
-Týká se polí:
+TECHNICKÁ PRAVIDLA
+Pokud není znám odkaz na obrázek, vrať přesně:
 img1_src
 img2_src
 img3_src
 
-vrátí se přesně tato hodnota.
-
-
----
+Týká se pole:
+obrazek
 
 DŮLEŽITÉ
-
 Nezačínej generovat obsah, dokud není dodán:
 název produktu
 EAN
 
-Na závěr zkontroluj pravopis a gramatiku pro každý jazyk.
+Veškerý text musí být pravopisně a gramaticky správně pro daný jazyk.

@@ -185,15 +185,13 @@ def build_mig_html(ai_output: str, template_kind: str) -> dict:
 
         product_name = values.get("nazev_produktu", "")
         short_desc = values.get("strucny_popis_produktu", "")
-        product_name = values.get("nazev_produktu", "")
-        short_desc = values.get("strucny_popis_produktu", "")
 
         # odstranění duplicitního názvu na začátku
         if short_desc.lower().startswith(product_name.lower()):
             short_desc = short_desc[len(product_name):].strip()
         
-        if short_desc.lower().startswith(product_name.lower().replace("-", "").strip()):
-            short_desc = short_desc[len(product_name):].strip()
+        if product_name and short_desc.lower().startswith(product_name.lower()):
+            short_desc = short_desc[len(product_name):].strip(" -–—,:;")
 
         final_short = f"{product_name} {short_desc}".strip()
         final_short = final_short.replace("\n", " ").replace("\r", " ")
