@@ -208,4 +208,57 @@ def apply_mig_output_to_csv(df: pd.DataFrame, row_index: int, ai_output: str, te
         errors="ignore"
     )
 
+    preferred_order = [
+        "code",
+        "pairCode",
+
+        "name:cs",
+        "name:en",
+        "name:sk",
+
+        "shortDescription:cs",
+        "shortDescription:en",
+        "shortDescription:sk",
+
+        "description:cs",
+        "description:en",
+        "description:sk",
+
+        "price",
+        "priceWithoutVat",
+        "standardPrice",
+
+        "categoryText",
+        "warranty",
+        "supplier",
+
+        "googleCategoryIdInFeed",
+        "heurekaCategoryId",
+        "zboziCategoryId",
+        "googleCategoryId",
+
+        "image",
+        "image2",
+        "image3",
+
+        "stock",
+        "percentVat",
+        "ossTaxRate:CZ",
+
+        "availabilityInStock",
+        "availabilityOutOfStock",
+
+        "ean",
+        "externalCode",
+        "productVisibility",
+
+        "xmlFeedName:cs",
+        "seoTitle:cs",
+    ]
+
+    existing_preferred = [col for col in preferred_order if col in df_out.columns]
+    remaining_cols = [col for col in df_out.columns if col not in existing_preferred]
+
+    df_out = df_out[existing_preferred + remaining_cols]
+
     return df_out
