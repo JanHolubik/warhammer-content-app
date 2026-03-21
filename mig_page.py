@@ -25,14 +25,14 @@ def render_mig_page():
         render_mig_section(
             product_type_label="MIG Barvy",
             prompt_type="mig_paints",
-            item_type="mig_paint",
+            item_type="product",
         )
 
     with tab2:
         render_mig_section(
             product_type_label="MIG Štětce / Příslušenství",
             prompt_type="mig_tools",
-            item_type="mig_tool",
+            item_type="product",
         )
 
 
