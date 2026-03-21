@@ -19,10 +19,6 @@ def render_mig_page():
     if "mig_generated_prompt_type" not in st.session_state:
         st.session_state["mig_generated_prompt_type"] = ""
 
-    state_key = f"{prompt_type}_export_csv_bytes"
-    if state_key not in st.session_state:
-        st.session_state[state_key] = None
-
     tab1, tab2 = st.tabs(["Barvy", "Štětce / Příslušenství"])
 
     with tab1:
@@ -41,6 +37,10 @@ def render_mig_page():
 
 
 def render_mig_section(product_type_label: str, prompt_type: str, item_type: str):
+    state_key = f"{prompt_type}_export_csv_bytes"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = None
+
     subtab1, subtab2 = st.tabs(["Nová karta", "Prompt + Fill"])
 
     with subtab1:
@@ -159,7 +159,10 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
                 else:
-                    st.error(f"CSV neobsahuje sloupec 'name' ani 'name:cs'. Nalezené sloupce: {list(df.columns)}")
+                    st.error(
+                        f"CSV neobsahuje sloupec 'name' ani 'name:cs'. "
+                        f"Nalezené sloupce: {list(df.columns)}"
+                    )
 
             except Exception as e:
                 st.error(f"Nepodařilo se načíst CSV: {e}")
@@ -175,7 +178,10 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                 )
                 st.session_state["mig_generated_prompt_type"] = prompt_type
 
-        if st.session_state["mig_generated_prompt_text"] and st.session_state["mig_generated_prompt_type"] == prompt_type:
+        if (
+            st.session_state["mig_generated_prompt_text"]
+            and st.session_state["mig_generated_prompt_type"] == prompt_type
+        ):
             prompt_text = st.session_state["mig_generated_prompt_text"]
 
             st.text_area(
@@ -267,10 +273,12 @@ nazev_produktu:
                         template_kind=prompt_type,
                         extra_values=extra_values,
                     )
+
                     st.session_state[state_key] = out_df.to_csv(
                         index=False,
                         sep=";"
                     ).encode("utf-8-sig")
+
                     st.success("CSV připraveno ke stažení.")
                 except Exception as e:
                     st.error(f"Chyba při zpracování: {e}")

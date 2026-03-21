@@ -28,6 +28,7 @@ def create_mig_card_row(
     description: str = "",
 ) -> pd.DataFrame:
     price_without_vat = round(price / 1.21, 2)
+
     row = {
         "code": code,
         "pairCode": "",
@@ -45,6 +46,7 @@ def create_mig_card_row(
         "heurekaCategoryId": 2351,
         "zboziCategoryId": 2413,
         "googleCategoryId": 6000,
+        "itemType": product_type,
     }
 
     return pd.DataFrame([row])
@@ -131,6 +133,7 @@ def replace_placeholders_in_docx(template_path: Path, values: dict) -> str:
                         paragraph.add_run(new_text)
 
     html_lines = []
+
     for paragraph in doc.paragraphs:
         txt = paragraph.text.strip()
         if txt:
@@ -187,8 +190,8 @@ def build_mig_html(ai_output: str, template_kind: str, extra_values: dict | None
         out[f"shortDescription:{lang}"] = replace_placeholders_in_docx(short_files[lang], values)
         out[f"description:{lang}"] = replace_placeholders_in_docx(long_files[lang], values)
 
-        product_name = values.get("nazev_produktu", "")
-        short_desc = values.get("strucny_popis_produktu", "")
+        product_name = values.get("nazev_produktu", "").strip()
+        short_desc = values.get("strucny_popis_produktu", "").strip()
 
         if product_name and short_desc.lower().startswith(product_name.lower()):
             short_desc = short_desc[len(product_name):].strip(" -–—,:;")
@@ -219,6 +222,22 @@ def apply_mig_output_to_csv(
             df_out[col] = ""
         df_out.at[row_index, col] = value
 
+    if extra_values:
+        if "img1_src" in extra_values:
+            if "image" not in df_out.columns:
+                df_out["image"] = ""
+            df_out.at[row_index, "image"] = extra_values["img1_src"]
+
+        if "img2_src" in extra_values:
+            if "image2" not in df_out.columns:
+                df_out["image2"] = ""
+            df_out.at[row_index, "image2"] = extra_values["img2_src"]
+
+        if "img3_src" in extra_values:
+            if "image3" not in df_out.columns:
+                df_out["image3"] = ""
+            df_out.at[row_index, "image3"] = extra_values["img3_src"]
+
     df_out = df_out.drop(
         columns=[c for c in ["name", "description", "shortDescription"] if c in df_out.columns],
         errors="ignore"
@@ -227,6 +246,7 @@ def apply_mig_output_to_csv(
     preferred_order = [
         "code",
         "pairCode",
+        "externalCode",
 
         "name:cs",
         "name:en",
@@ -247,6 +267,8 @@ def apply_mig_output_to_csv(
         "categoryText",
         "warranty",
         "supplier",
+        "manufacturer",
+        "itemType",
 
         "googleCategoryIdInFeed",
         "heurekaCategoryId",
@@ -265,11 +287,19 @@ def apply_mig_output_to_csv(
         "availabilityOutOfStock",
 
         "ean",
-        "externalCode",
         "productVisibility",
 
         "xmlFeedName:cs",
+        "xmlFeedName:en",
+        "xmlFeedName:sk",
+
         "seoTitle:cs",
+        "seoTitle:en",
+        "seoTitle:sk",
+
+        "metaDescription:cs",
+        "metaDescription:en",
+        "metaDescription:sk",
     ]
 
     existing_preferred = [col for col in preferred_order if col in df_out.columns]
