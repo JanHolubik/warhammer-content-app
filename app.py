@@ -501,7 +501,7 @@ nazev_produktu:
         )
 
         video_url = st.text_input(
-            "Video URL - https://www.youtube.com/embed/VIDEO_ID   (vložím od =po konec)",
+            "Video URL - www.youtube.com/embed/VIDEO_ID   (vložím od =po konec)",
             value=preview_row.get("video_url", "") if preview_row is not None else "",
             key="fill_wh_video_url",
         )
