@@ -767,9 +767,9 @@ def run_filler(
     dop_en = values_by_lang["en"].get("doporučení_pro_koho", "").strip() or values_by_lang["en"].get(meta_key, "").strip()
     dop_sk = values_by_lang["sk"].get("doporučení_pro_koho", "").strip() or values_by_lang["sk"].get(meta_key, "").strip()
 
-    df.loc[mask, "metaDescription:cs"] = f"<em>{dop_cs}</em>" if dop_cs else ""
-    df.loc[mask, "metaDescription:en"] = f"<em>{dop_en}</em>" if dop_en else ""
-    df.loc[mask, "metaDescription:sk"] = f"<em>{dop_sk}</em>" if dop_sk else ""
+    df.loc[mask, "metaDescription:cs"] = dop_cs if dop_cs else ""
+    df.loc[mask, "metaDescription:en"] = dop_en if dop_en else ""
+    df.loc[mask, "metaDescription:sk"] = dop_sk if dop_sk else ""
 
     for col in ["name", "xmlFeedName", "seoTitle", "system", "faction", "productType", "hp_url", "gw_url"]:
         if col in df.columns:
