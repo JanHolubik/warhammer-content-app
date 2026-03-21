@@ -510,17 +510,41 @@ def hp_extract_ean(soup: BeautifulSoup) -> str:
     m = re.search(r"\bEAN\b[^\d]*(\d{8,14})\b", txt, flags=re.IGNORECASE)
     if m:
         return m.group(1)
+
     m2 = re.search(r"\b(\d{13})\b", txt)
-    return m2.group(1) if m2 else ""
+    if m2:
+        return m2.group(1)
+
+    for script in soup.select("script[type='application/ld+json']"):
+        txt_json = script.get_text(" ", strip=True)
+        m3 = re.search(r'"gtin13"\s*:\s*"(\d{13})"', txt_json, flags=re.I)
+        if m3:
+            return m3.group(1)
+        m4 = re.search(r'"gtin"\s*:\s*"(\d{8,14})"', txt_json, flags=re.I)
+        if m4:
+            return m4.group(1)
+
+    return ""
 
 
 def hp_extract_external_code(soup: BeautifulSoup) -> str:
     txt = soup.get_text("\n")
+
     m = re.search(r"\b(\d{2,3}\-\d{2,4})\b", txt)
     if m:
         return m.group(1)
-    m2 = re.search(r"(Kód|Code|Produktové číslo)[^\w]*(\w[\w\-\/]+)", txt, flags=re.IGNORECASE)
-    return m2.group(2) if m2 else ""
+
+    m2 = re.search(r"(Kód|Code|Produktové číslo|Číslo produktu|SKU)[^\w]*(\w[\w\-\/]+)", txt, flags=re.IGNORECASE)
+    if m2:
+        return m2.group(2)
+
+    for script in soup.select("script[type='application/ld+json']"):
+        txt_json = script.get_text(" ", strip=True)
+        m3 = re.search(r'"sku"\s*:\s*"([^"]+)"', txt_json, flags=re.I)
+        if m3:
+            return m3.group(1).strip()
+
+    return ""
 
 
 def build_name_from_h1(h1: str, system: str = "", faction: str = "") -> str:
@@ -865,6 +889,54 @@ def scrape_gw_images_fallback_simple(
     return urls
 
 
+def keep_real_product_images(images: List[str]) -> List[str]:
+    """
+    Odfiltruje hero/marketing obrázky a nechá skutečné produktové fotky.
+    """
+    out: List[str] = []
+
+    bad_markers = [
+        "aeronautica_imperialis",
+        "landscape",
+        "hero",
+        "header",
+        "banner",
+        "carousel",
+        "category",
+    ]
+
+    for u in images:
+        low = u.lower()
+
+        if any(marker in low for marker in bad_markers):
+            continue
+
+        looks_product_like = (
+            "/catalog/product/" in low
+            or "/app/resources/catalog/product/" in low
+            or "/media/catalog/product/" in low
+            or "/resources/catalog/product/" in low
+        )
+
+        if looks_product_like:
+            out.append(u)
+
+    # fallback: když po filtrování nic nezbyde, vrať původní seznam
+    return out if out else images
+
+
+def extract_code_from_images(images: List[str]) -> str:
+    """
+    Pokusí se vytáhnout produktový kód z GW obrázků.
+    Např. 99120206012_SkavenHellPitAbomination...
+    """
+    for u in images:
+        m = re.search(r"/(\d{8,14})_[^/]+(?:\.jpg|\.jpeg|\.png|\.webp|\.avif)", u, flags=re.I)
+        if m:
+            return m.group(1)
+    return ""
+
+
 # =========================
 # TEMPLATE RESOLUTION
 # =========================
@@ -1084,6 +1156,8 @@ def run_scraper(
                         ensure_query=bool(images_ensure_query),
                     )
 
+                images = keep_real_product_images(images)
+
             except Exception as e:
                 log(f"GW ERROR: {e}", verbose)
                 images = []
@@ -1093,6 +1167,19 @@ def run_scraper(
 
         if only_first_image and images:
             images = [images[0]]
+
+        fallback_code = extract_code_from_images(images)
+
+        if not external and fallback_code:
+            external = fallback_code
+
+        code = ""
+        if ean:
+            code = ean
+        elif external:
+            code = external
+        elif fallback_code:
+            code = fallback_code
 
         name_final = build_name_from_h1(h1, _system, faction)
 
@@ -1106,8 +1193,9 @@ def run_scraper(
         print(f"  GW: {gw_final if gw_url else '-'}")
         print(
             f"  type={ptype}"
-            f" | code={(ean or '-')}"
+            f" | code={(code or '-')}"
             f" | ean={(ean or '-')}"
+            f" | external={(external or '-')}"
             f" | price={fmt_cz_money(price)}"
             f" | gwPrice={(f'{gw_price}{gw_currency}' if gw_price is not None and gw_currency else '-')}"
             f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
@@ -1119,8 +1207,6 @@ def run_scraper(
             print("  first image: -")
         print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
         print("  ✅ OK\n")
-
-        code = ean if ean else ""
 
         create_row: Dict[str, str] = {c: "" for c in CREATE_COLUMNS}
         create_row.update({
