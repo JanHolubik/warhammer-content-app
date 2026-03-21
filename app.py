@@ -275,6 +275,10 @@ if st.session_state["selected_engine"] == "warhammer":
                     name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
                     product_name = df_preview.iloc[0].get(name_col, "")
                     product_ean = df_preview.iloc[0].get("ean", "")
+                    if not str(product_ean).strip():
+                        product_ean = df_preview.iloc[0].get("externalCode", "")
+                    if not str(product_ean).strip():
+                        product_ean = df_preview.iloc[0].get("code", "")
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
@@ -465,6 +469,10 @@ nazev_produktu:
                     name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
                     product_name_preview = preview_row.get(name_col, "")
                     product_ean_preview = preview_row.get("ean", "")
+                    if not str(product_ean_preview).strip():
+                        product_ean_preview = preview_row.get("externalCode", "")
+                    if not str(product_ean_preview).strip():
+                        product_ean_preview = preview_row.get("code", "")
                     st.info(f"Produkt: {product_name_preview}")
                     st.write(f"EAN: {product_ean_preview}")
             except Exception as e:
