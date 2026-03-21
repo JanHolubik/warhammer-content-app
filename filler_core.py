@@ -594,6 +594,7 @@ def ensure_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "description:cs", "description:en", "description:sk",
         "xmlFeedName:cs", "xmlFeedName:en", "xmlFeedName:sk",
         "seoTitle:cs", "seoTitle:en", "seoTitle:sk",
+        "metaDescription:cs", "metaDescription:en", "metaDescription:sk",
     ]
     for col in required_cols:
         if col not in df.columns:
@@ -759,6 +760,16 @@ def run_filler(
     df.loc[mask, "seoTitle:cs"] = f"{final_name_cs} | PlasticWargaming" if final_name_cs else ""
     df.loc[mask, "seoTitle:en"] = f"{final_name_en} | PlasticWargaming" if final_name_en else ""
     df.loc[mask, "seoTitle:sk"] = f"{final_name_sk} | PlasticWargaming" if final_name_sk else ""
+
+    meta_key = canonical_key("doporučení_pro_koho")
+
+    dop_cs = values_by_lang["cs"].get("doporučení_pro_koho", "").strip() or values_by_lang["cs"].get(meta_key, "").strip()
+    dop_en = values_by_lang["en"].get("doporučení_pro_koho", "").strip() or values_by_lang["en"].get(meta_key, "").strip()
+    dop_sk = values_by_lang["sk"].get("doporučení_pro_koho", "").strip() or values_by_lang["sk"].get(meta_key, "").strip()
+
+    df.loc[mask, "metaDescription:cs"] = f"<em>{dop_cs}</em>" if dop_cs else ""
+    df.loc[mask, "metaDescription:en"] = f"<em>{dop_en}</em>" if dop_en else ""
+    df.loc[mask, "metaDescription:sk"] = f"<em>{dop_sk}</em>" if dop_sk else ""
 
     for col in ["name", "xmlFeedName", "seoTitle", "system", "faction", "productType", "hp_url", "gw_url"]:
         if col in df.columns:
