@@ -27,6 +27,18 @@ nudně
 přehnaně technicky
 jako kopie pravidel
 
+INTERNÍ KONTEXT POSTAVY – POVINNÉ (NEVYPISUJ)
+Nejprve si interně vytvoř krátký kontext postavy (max 5 bodů):
+- styl boje
+- role v armádě
+- charakter / vibe modelu
+- silná stránka
+- slabší stránka
+
+Tento kontext nikdy nepiš do výstupu.
+Použij ho pouze jako základ pro generování všech polí.
+
+
 TVRDÝ LOCK – BEZ VÝJIMEK
 Nikdy negeneruj HTML.
 Nikdy negeneruj CSS.
