@@ -747,6 +747,9 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             or "/catalog/product/" in path
             or "/media/catalog/product/" in path
             or "/resources/catalog/product/" in path
+            or "/app/resources/catalog/product/threesixty/" in path
+            or "/catalog/product/threesixty/" in path
+            or "/resources/catalog/product/threesixty/" in path
         )
 
         looks_like_image = any(ext in path for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"])
@@ -811,7 +814,38 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
         return url
 
 
-def scrape_gw_images_stable(
+def get_best_picture_url(node: BeautifulSoup, base_url: str) -> Optional[str]:
+    if node is None:
+        return None
+
+    source = node.select_one("picture source[srcset]")
+    if source:
+        best = pick_best_srcset((source.get("srcset") or "").strip())
+        if best:
+            return abs_url(base_url, best)
+
+    img = node.select_one("picture img[src], img[src]")
+    if img:
+        src = (img.get("src") or "").strip()
+        if src:
+            return abs_url(base_url, src)
+
+    return None
+
+
+def collect_urls_from_selectors(soup: BeautifulSoup, base_url: str, selectors: List[str]) -> List[str]:
+    urls: List[str] = []
+
+    for sel in selectors:
+        for node in soup.select(sel):
+            u = get_best_picture_url(node, base_url)
+            if u:
+                urls.append(u)
+
+    return urls
+
+
+def extract_warhammer_gallery_urls(
     gw_url: str,
     html: str,
     max_images: int = 20,
@@ -820,42 +854,68 @@ def scrape_gw_images_stable(
     ensure_query_default: str = "fm=webp&w=1200&h=1237",
 ) -> List[str]:
     soup = BeautifulSoup(html, "lxml")
-    expected = expected_count_from_html(html)
 
-    base = extract_imgs_from_node(soup, gw_url)
-    base = filter_gw_product_images(base, keep_360=keep_360)
-    base = dedupe_by_filename(uniq_keep_order(base))
+    urls: List[str] = []
 
-    need_fallback = has_full_gallery_button(soup) or (expected is not None and expected > len(base))
+    urls.extend(
+        collect_urls_from_selectors(
+            soup,
+            gw_url,
+            ['button[data-testid="image-carousel-image-button"]']
+        )
+    )
 
-    if need_fallback:
-        modal_imgs: List[str] = []
-        for n in soup.select('[data-testid="gallery-modal-image"]'):
-            modal_imgs.extend(extract_imgs_from_node(n, gw_url))
+    urls.extend(
+        collect_urls_from_selectors(
+            soup,
+            gw_url,
+            ['button[data-testid="gallery-image-button"]']
+        )
+    )
 
-        if not modal_imgs:
-            container = soup.select_one('[data-testid="container-gallery-modal"]')
-            if container:
-                modal_imgs.extend(extract_imgs_from_node(container, gw_url))
+    urls.extend(
+        collect_urls_from_selectors(
+            soup,
+            gw_url,
+            ['li[data-testid="gallery-image"]']
+        )
+    )
 
-        modal_imgs = filter_gw_product_images(modal_imgs, keep_360=keep_360)
-        modal_imgs = dedupe_by_filename(uniq_keep_order(modal_imgs))
+    if not urls:
+        for img in soup.select('img[data-testid="image-carousel-desktop-image"]'):
+            src = (img.get("src") or "").strip()
+            if src:
+                urls.append(abs_url(gw_url, src))
 
-        merged = modal_imgs[:] if modal_imgs else []
-        if len(merged) < len(base):
-            merged = dedupe_by_filename(uniq_keep_order(merged + base))
-    else:
-        merged = base
+    urls = filter_gw_product_images(urls, keep_360=keep_360)
+    urls = dedupe_by_filename(uniq_keep_order(urls))
+    urls = keep_real_product_images(urls)
 
-    if expected is not None and expected > 0 and len(merged) > expected:
-        merged = merged[:expected]
-
-    merged = merged[:max_images]
+    urls = urls[:max_images]
 
     if ensure_query:
-        merged = [ensure_query_defaults(u, ensure_query_default) for u in merged]
+        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
 
-    return merged
+    return urls
+
+
+def scrape_gw_images_stable(
+    gw_url: str,
+    html: str,
+    max_images: int = 20,
+    keep_360: bool = False,
+    ensure_query: bool = False,
+    ensure_query_default: str = "fm=webp&w=1200&h=1237",
+) -> List[str]:
+    urls = extract_warhammer_gallery_urls(
+        gw_url=gw_url,
+        html=html,
+        max_images=max_images,
+        keep_360=keep_360,
+        ensure_query=ensure_query,
+        ensure_query_default=ensure_query_default,
+    )
+    return urls
 
 
 def scrape_gw_images_fallback_simple(
@@ -916,12 +976,14 @@ def keep_real_product_images(images: List[str]) -> List[str]:
             or "/app/resources/catalog/product/" in low
             or "/media/catalog/product/" in low
             or "/resources/catalog/product/" in low
+            or "/catalog/product/threesixty/" in low
+            or "/app/resources/catalog/product/threesixty/" in low
+            or "/resources/catalog/product/threesixty/" in low
         )
 
         if looks_product_like:
             out.append(u)
 
-    # fallback: když po filtrování nic nezbyde, vrať původní seznam
     return out if out else images
 
 
