@@ -592,6 +592,8 @@ def ensure_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         "name:cs", "name:en", "name:sk",
         "shortDescription:cs", "shortDescription:en", "shortDescription:sk",
         "description:cs", "description:en", "description:sk",
+        "xmlFeedName:cs", "xmlFeedName:en", "xmlFeedName:sk",
+        "seoTitle:cs", "seoTitle:en", "seoTitle:sk",
     ]
     for col in required_cols:
         if col not in df.columns:
@@ -736,22 +738,27 @@ def run_filler(
     df.loc[mask, "description:en"] = final_detail_html_en
     df.loc[mask, "description:sk"] = final_detail_html_sk
 
-    name_key = canonical_key("nazev_produktu")
+    source_name_base = str(source_row.get("name", "")).strip()
 
-    final_name_cs = str(source_row.get("name:cs", "") or source_row.get("name", "")).strip()
-    if values_by_lang["cs"].get(name_key, "").strip():
-        final_name_cs = values_by_lang["cs"][name_key]
+    final_name_cs = str(source_row.get("name:cs", "")).strip() or source_name_base
+    final_name_en = str(source_row.get("name:en", "")).strip() or source_name_base
+    final_name_sk = str(source_row.get("name:sk", "")).strip() or source_name_base
+
     df.loc[mask, "name:cs"] = final_name_cs
-
-    final_name_en = str(source_row.get("name:en", "") or source_row.get("name", "")).strip()
-    if values_by_lang["en"].get(name_key, "").strip():
-        final_name_en = values_by_lang["en"][name_key]
     df.loc[mask, "name:en"] = final_name_en
-
-    final_name_sk = str(source_row.get("name:sk", "") or source_row.get("name", "")).strip()
-    if values_by_lang["sk"].get(name_key, "").strip():
-        final_name_sk = values_by_lang["sk"][name_key]
     df.loc[mask, "name:sk"] = final_name_sk
+
+    final_xml_feed_name_cs = final_name_cs
+    final_xml_feed_name_en = final_name_en
+    final_xml_feed_name_sk = final_name_sk
+
+    df.loc[mask, "xmlFeedName:cs"] = final_xml_feed_name_cs
+    df.loc[mask, "xmlFeedName:en"] = final_xml_feed_name_en
+    df.loc[mask, "xmlFeedName:sk"] = final_xml_feed_name_sk
+
+    df.loc[mask, "seoTitle:cs"] = f"{final_name_cs} | PlasticWargaming" if final_name_cs else ""
+    df.loc[mask, "seoTitle:en"] = f"{final_name_en} | PlasticWargaming" if final_name_en else ""
+    df.loc[mask, "seoTitle:sk"] = f"{final_name_sk} | PlasticWargaming" if final_name_sk else ""
 
     for col in ["name", "xmlFeedName", "seoTitle", "system", "faction", "productType", "hp_url", "gw_url"]:
         if col in df.columns:
