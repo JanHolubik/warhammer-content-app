@@ -471,7 +471,7 @@ nazev_produktu:
         st.markdown("### Odkazy na obrázky a video")
 
         intro_image_src = st.text_input(
-            "Hlavní obrázek",
+            "Hlavní obrázek - PRVNÍ OBRAZEK NA STRÁNCE (VELKÝ)",
             value=preview_row.get("image", "") if preview_row is not None else "",
             key="fill_wh_intro_image_src",
         )
@@ -495,13 +495,13 @@ nazev_produktu:
         )
 
         img4_src = st.text_input(
-            "Obrázek 4",
+            "Obrázek 4  - NENÍ ZATÍM NEDÁVAT",
             value=preview_row.get("image5", "") if preview_row is not None else "",
             key="fill_wh_img4_src",
         )
 
         video_url = st.text_input(
-            "Video URL",
+            "Video URL - https://www.youtube.com/embed/VIDEO_ID   (vložím od =po konec)",
             value=preview_row.get("video_url", "") if preview_row is not None else "",
             key="fill_wh_video_url",
         )
@@ -594,14 +594,7 @@ nazev_produktu:
                 key="download_filled_csv_persistent",
             )
 
-            st.download_button(
-                label="Stáhnout CREATE CSV",
-                data=st.session_state["create_csv_bytes"],
-                file_name="0_CREATE.csv",
-                mime="text/csv",
-                key="download_create_csv_persistent",
-            )
-
+        
             if st.button("Vymazat výstupy", key="clear_fill_outputs"):
                 st.session_state["filled_csv_bytes"] = None
                 st.session_state["create_csv_bytes"] = None
