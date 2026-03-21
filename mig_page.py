@@ -19,8 +19,9 @@ def render_mig_page():
     if "mig_generated_prompt_type" not in st.session_state:
         st.session_state["mig_generated_prompt_type"] = ""
 
-    if "mig_export_csv_bytes" not in st.session_state:
-        st.session_state["mig_export_csv_bytes"] = None
+    state_key = f"{prompt_type}_export_csv_bytes"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = None
 
     tab1, tab2 = st.tabs(["Barvy", "Štětce / Příslušenství"])
 
@@ -266,7 +267,7 @@ nazev_produktu:
                         template_kind=prompt_type,
                         extra_values=extra_values,
                     )
-                    st.session_state["mig_export_csv_bytes"] = out_df.to_csv(
+                    st.session_state[state_key] = out_df.to_csv(
                         index=False,
                         sep=";"
                     ).encode("utf-8-sig")
@@ -274,10 +275,10 @@ nazev_produktu:
                 except Exception as e:
                     st.error(f"Chyba při zpracování: {e}")
 
-        if st.session_state["mig_export_csv_bytes"] is not None:
+        if st.session_state[state_key] is not None:
             st.download_button(
                 "Stáhnout FILLED CSV",
-                data=st.session_state["mig_export_csv_bytes"],
+                data=st.session_state[state_key],
                 file_name=f"{prompt_type}_FILLED.csv",
                 mime="text/csv",
                 key=f"{prompt_type}_download_filled",

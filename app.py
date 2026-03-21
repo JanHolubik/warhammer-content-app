@@ -508,53 +508,17 @@ nazev_produktu:
             key="fill_wh_video_url",
         )
 
-        st.markdown("### Proklikávací odkazy")
+        default_link_label = product_name_preview if product_name_preview else ""
 
-        default_link_label = product_name_preview if preview_row is not None else ""
+        link_1_label = default_link_label
+        link_2_label = default_link_label
+        link_3_label = default_link_label
+        link_4_label = default_link_label
 
-        link_1_label = st.text_input(
-            "Text odkazu 1",
-            value=default_link_label,
-            key="fill_wh_link_1_label"
-        )
-        link_1_url = st.text_input(
-            "URL odkazu 1",
-            value=img1_src,
-            key="fill_wh_link_1_url"
-        )
-
-        link_2_label = st.text_input(
-            "Text odkazu 2",
-            value=default_link_label,
-            key="fill_wh_link_2_label"
-        )
-        link_2_url = st.text_input(
-            "URL odkazu 2",
-            value=img2_src,
-            key="fill_wh_link_2_url"
-        )
-
-        link_3_label = st.text_input(
-            "Text odkazu 3",
-            value=default_link_label,
-            key="fill_wh_link_3_label"
-        )
-        link_3_url = st.text_input(
-            "URL odkazu 3",
-            value=img3_src,
-            key="fill_wh_link_3_url"
-        )
-
-        link_4_label = st.text_input(
-            "Text odkazu 4",
-            value=default_link_label,
-            key="fill_wh_link_4_label"
-        )
-        link_4_url = st.text_input(
-            "URL odkazu 4",
-            value=img4_src,
-            key="fill_wh_link_4_url"
-        )
+        link_1_url = img1_src
+        link_2_url = img2_src
+        link_3_url = img3_src
+        link_4_url = img4_src
 
         if st.button("Spustit fill", key="fill_run_button"):
             try:

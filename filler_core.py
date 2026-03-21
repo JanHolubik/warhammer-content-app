@@ -679,7 +679,10 @@ def run_filler(
     values_by_lang = parse_prompt_output_by_lang(prompt_output_text)
 
     if extra_values:
-        normalized_extra = {canonical_key(k): normalize_docx_text(v).strip() for k, v in extra_values.items()}
+        normalized_extra = {
+            canonical_key(k): normalize_docx_text(v).strip()
+            for k, v in extra_values.items()
+        }
         for lang in ("cs", "en", "sk"):
             values_by_lang[lang].update(normalized_extra)
 
@@ -750,7 +753,7 @@ def run_filler(
         final_name_sk = values_by_lang["sk"][name_key]
     df.loc[mask, "name:sk"] = final_name_sk
 
-    for col in ["name", "xmlFeedName", "seoTitle"]:
+    for col in ["name", "xmlFeedName", "seoTitle", "system", "faction", "productType", "hp_url", "gw_url"]:
         if col in df.columns:
             df = df.drop(columns=[col])
 
