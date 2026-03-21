@@ -235,17 +235,7 @@ if st.session_state["selected_engine"] == "warhammer":
                 key="download_main_scraper_source_csv_persistent",
             )
 
-            if st.session_state["scraper_split_files"]:
-                st.subheader("Vygenerované split CSV soubory")
-                for i, file_path in enumerate(st.session_state["scraper_split_files"][:50]):
-                    p = Path(file_path)
-                    st.download_button(
-                        label=f"Stáhnout {p.name}",
-                        data=p.read_bytes(),
-                        file_name=p.name,
-                        mime="text/csv",
-                        key=f"download_split_persistent_{i}_{p.name}",
-                    )
+        
 
             if st.button("Vymazat výstupy scraperu", key="clear_scraper_outputs"):
                 st.session_state["scraper_create_csv_bytes"] = None
