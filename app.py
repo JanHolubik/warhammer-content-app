@@ -257,6 +257,7 @@ if st.session_state["selected_engine"] == "warhammer":
 
         product_name = ""
         product_ean = ""
+        product_gw_url = ""
 
         if uploaded_split_csv is not None:
             try:
@@ -273,6 +274,8 @@ if st.session_state["selected_engine"] == "warhammer":
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
+                    if str(product_gw_url).strip():
+                        st.write(f"GW URL: {product_gw_url}")
 
             except Exception as e:
                 st.warning(f"Nepodařilo se načíst CSV: {e}")
@@ -320,6 +323,9 @@ PRODUKT
 
 EAN
 {product_ean}
+
+GW URL
+{product_gw_url}
 --------------------------------------------------
 """
 
