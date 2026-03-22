@@ -271,6 +271,7 @@ if st.session_state["selected_engine"] == "warhammer":
                         product_ean = df_preview.iloc[0].get("externalCode", "")
                     if not str(product_ean).strip():
                         product_ean = df_preview.iloc[0].get("code", "")
+                    product_gw_url = row_for_prompt.get("gw_url", "")
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
