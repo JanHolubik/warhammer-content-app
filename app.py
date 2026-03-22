@@ -262,19 +262,31 @@ if st.session_state["selected_engine"] == "warhammer":
         if uploaded_split_csv is not None:
             try:
                 df_preview = pd.read_csv(uploaded_split_csv, sep=";", dtype=str).fillna("")
+                df_preview.columns = [str(c).strip() for c in df_preview.columns]
 
                 if not df_preview.empty:
+                    row_for_prompt = df_preview.iloc[0]
+
+                    if "gw_url" in df_preview.columns:
+                        non_empty_gw = df_preview[
+                            df_preview["gw_url"].astype(str).str.strip() != ""
+                        ]
+                        if not non_empty_gw.empty:
+                            row_for_prompt = non_empty_gw.iloc[0]
+
                     name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
-                    product_name = df_preview.iloc[0].get(name_col, "")
-                    product_ean = df_preview.iloc[0].get("ean", "")
+                    product_name = row_for_prompt.get(name_col, "")
+                    product_ean = row_for_prompt.get("ean", "")
+
                     if not str(product_ean).strip():
-                        product_ean = df_preview.iloc[0].get("externalCode", "")
+                        product_ean = row_for_prompt.get("externalCode", "")
                     if not str(product_ean).strip():
-                        product_ean = df_preview.iloc[0].get("code", "")
+                        product_ean = row_for_prompt.get("code", "")
+
                     product_gw_url = row_for_prompt.get("gw_url", "")
 
                     st.info(f"Produkt: {product_name}")
-                    st.write(f"EAN: {product_ean}")
+                    st.write(f"EAN / Code: {product_ean}")
                     if str(product_gw_url).strip():
                         st.write(f"GW URL: {product_gw_url}")
 
