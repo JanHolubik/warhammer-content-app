@@ -10,6 +10,7 @@ from docx import Document
 from filler_core import run_filler
 from scraper_core import run_scraper
 from mig_page import render_mig_page
+from novinky_page import render_novinky_page
 
 
 PROMPT_TEMPLATE_DIR = Path("prompt_templates")
@@ -126,7 +127,7 @@ if st.session_state["selected_engine"] == "warhammer":
         st.session_state["selected_engine"] = None
         st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Scraper", "Prompt", "Fill", "Novinky"])
 
     with tab1:
         st.header("Scraper")
@@ -600,6 +601,9 @@ nazev_produktu:
                 st.session_state["create_csv_bytes"] = None
                 st.session_state["fill_product_name"] = ""
                 st.rerun()
+
+    with tab4:
+        render_novinky_page()            
 
 
 # =========================
