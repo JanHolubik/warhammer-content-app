@@ -400,27 +400,27 @@ GW URL
                 height=50,
             )
 
-        st.subheader("⬇ VLOŽ SEM AI OUTPUT")
-
-        ai_output = st.text_area(
+        st.text_area(
             "AI Output",
             height=400,
             key="prompt_ai_output",
             placeholder="""
-[LANG=cs]
-nazev_produktu:
-...
+        [LANG=cs]
+        nazev_produktu:
+        ...
 
-[LANG=en]
-...
+        [LANG=en]
+        ...
 
-[LANG=sk]
-...
-""",
+        [LANG=sk]
+        ...
+        """,
         )
 
-        if ai_output.strip():
-            prompt_docx_bytes = make_docx_bytes(ai_output)
+        ai_output_value = st.session_state.get("prompt_ai_output", "")
+
+        if str(ai_output_value).strip():
+            prompt_docx_bytes = make_docx_bytes(ai_output_value)
 
             st.download_button(
                 label="Stáhnout vystup_prompt.docx",
