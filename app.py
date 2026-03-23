@@ -57,6 +57,9 @@ if "scraper_row_count" not in st.session_state:
 if "scraper_first_product_name" not in st.session_state:
     st.session_state["scraper_first_product_name"] = "warhammer"
 
+if "scraper_debug_logs" not in st.session_state:
+    st.session_state["scraper_debug_logs"] = []    
+
 st.markdown("""
 <style>
 button[data-baseweb="tab"] {
@@ -227,9 +230,10 @@ if st.session_state["selected_engine"] == "warhammer":
 
             st.success("Scraper proběhl úspěšně.")
             st.write("Počet produktů:", st.session_state["scraper_row_count"])
-            if verbose_mode and result.get("scraper_debug_logs"):
+
+            if verbose_mode and st.session_state["scraper_debug_logs"]:
                 st.subheader("Kontrola dat")
-                for block in result["debug_logs"]:
+                for block in st.session_state["scraper_debug_logs"]:
                     st.code(block)
 
             st.download_button(
@@ -247,8 +251,6 @@ if st.session_state["selected_engine"] == "warhammer":
                 mime="text/csv",
                 key="download_main_scraper_source_csv_persistent",
             )
-
-        
 
             if st.button("Vymazat výstupy scraperu", key="clear_scraper_outputs"):
                 st.session_state["scraper_create_csv_bytes"] = None
