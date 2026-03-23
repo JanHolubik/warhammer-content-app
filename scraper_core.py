@@ -1036,28 +1036,60 @@ def keep_real_product_images(images: List[str]) -> List[str]:
 
 def extract_code_from_images(images: List[str]) -> str:
     """
-    Priorita:
-    1) normální produktové obrázky
-    2) až potom threeSixty
+    Lepší heuristika pro GW:
+    1) sesbírá všechny kódy z obrázků
+    2) preferuje ne-LEAD / ne-marketing obrázky
+    3) vezme nejčastější kód
+    4) fallback na první nalezený
     """
-    normal: List[str] = []
-    spin: List[str] = []
+    candidates: List[Tuple[str, int]] = []
 
     for u in images:
         low = u.lower()
-        if "threesixty" in low:
-            spin.append(u)
-        else:
-            normal.append(u)
 
-    ordered = normal + spin
-
-    for u in ordered:
         m = re.search(r"/(\d{8,14})_[^/]+(?:\.jpg|\.jpeg|\.png|\.webp|\.avif)", u, flags=re.I)
-        if m:
-            return m.group(1)
+        if not m:
+            continue
 
-    return ""
+        code = m.group(1)
+
+        score = 0
+
+        # normální produktové obrázky
+        if "threesixty" not in low:
+            score += 3
+
+        # nechceme LEAD marketing obrázek jako hlavní prioritu
+        if "lead" not in low:
+            score += 3
+
+        # sprue / produktové doplňkové obrázky často nesou reálnější produktový kód
+        if "sprue" in low:
+            score += 2
+
+        # WC product shots také bývají užitečné
+        if "_wc" in low or "wc" in Path(urlparse(strip_query(u)).path).name.lower():
+            score += 1
+
+        candidates.append((code, score))
+
+    if not candidates:
+        return ""
+
+    # sečti score pro každý kód
+    totals: Dict[str, int] = {}
+    counts: Dict[str, int] = {}
+
+    for code, score in candidates:
+        totals[code] = totals.get(code, 0) + score
+        counts[code] = counts.get(code, 0) + 1
+
+    # bonus za opakování stejného kódu
+    for code, cnt in counts.items():
+        totals[code] += cnt * 2
+
+    best_code = sorted(totals.items(), key=lambda x: (-x[1], x[0]))[0][0]
+    return best_code
 
 
 # =========================
@@ -1214,7 +1246,11 @@ def run_scraper(
         hp_url = str(r["hp_url"]).strip()
         gw_url = str(r["gw_url"]).strip()
 
-        hp_html, _hp_final = fetch_html(hp_url, referer="https://www.herniprostor.cz/", headers=BASE_HEADERS)
+        hp_html, _hp_final = fetch_html(
+            hp_url,
+            referer="https://www.herniprostor.cz/",
+            headers=BASE_HEADERS
+        )
         hp_soup = BeautifulSoup(hp_html, "html.parser")
 
         h1_raw = hp_extract_h1(hp_soup)
@@ -1309,7 +1345,11 @@ def run_scraper(
         xml_feed_name = make_xml_feed_name_from_name(name_final)
         seo_title = make_seo_title_from_name(name_final)
 
-        std_price = round(gw_price * FX_RATES[gw_currency], 2) if (gw_price is not None and gw_currency in FX_RATES) else None
+        std_price = (
+            round(gw_price * FX_RATES[gw_currency], 2)
+            if (gw_price is not None and gw_currency in FX_RATES)
+            else None
+        )
 
         print(f"[{idx:02d}/{total:02d}] {name_final}")
         print(f"  HP: {hp_url}")
@@ -1426,11 +1466,23 @@ def run_scraper(
 
     create_df = pd.DataFrame(create_rows, columns=CREATE_COLUMNS)
     create_df = create_df.reindex(columns=CREATE_COLUMNS, fill_value="")
-    create_df.to_csv(create_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
+    create_df.to_csv(
+        create_output_path,
+        sep=";",
+        index=False,
+        encoding="utf-8-sig",
+        quoting=csv.QUOTE_ALL
+    )
 
     source_df = pd.DataFrame(source_rows, columns=SOURCE_COLUMNS)
     source_df = source_df.reindex(columns=SOURCE_COLUMNS, fill_value="")
-    source_df.to_csv(source_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
+    source_df.to_csv(
+        source_output_path,
+        sep=";",
+        index=False,
+        encoding="utf-8-sig",
+        quoting=csv.QUOTE_ALL
+    )
 
     print(f"\nOK: saved CREATE {create_output_path} ({len(create_df)} rows)")
     print(f"OK: saved SOURCE {source_output_path} ({len(source_df)} rows)")
