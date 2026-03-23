@@ -291,6 +291,7 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             continue
 
         low = u.lower()
+
         if not keep_360 and "threesixty" in low:
             continue
 
@@ -299,7 +300,9 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             or "/catalog/product/" in low
             or "/media/catalog/product/" in low
             or "/resources/catalog/product/" in low
+            or "warhammer.com/app/resources/catalog/product/" in low
         )
+
         if allowed:
             out.append(u)
 
@@ -354,18 +357,39 @@ def scrape_gw_images(gw_url: str, html: str, max_images: int = 20, keep_360: boo
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # hlavní carousel
+    # 1) carousel tlačítka
     for btn in soup.select('[data-testid="image-carousel-image-button"]'):
         urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    # gallery fallback
+    # 2) aktivní obrázek
+    for node in soup.select('[data-testid="image-carousel-active-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 3) full gallery
     for btn in soup.select('[data-testid="gallery-image-button"]'):
         urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    # active image fallback
-    active = soup.select_one('[data-testid="image-carousel-active-image"]')
-    if active:
-        urls.extend(extract_imgs_from_node(active, gw_url))
+    for li in soup.select('[data-testid="gallery-image"]'):
+        urls.extend(extract_imgs_from_node(li, gw_url))
+
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
+
+    # 4) fallback – přímo všechny relevantní source/img v dokumentu
+    for el in soup.select(
+        'source[srcset*="/catalog/product/"], '
+        'source[srcset*="/app/resources/catalog/product/"], '
+        'img[src*="/catalog/product/"], '
+        'img[src*="/app/resources/catalog/product/"]'
+    ):
+        if el.name == "source":
+            best = pick_best_srcset((el.get("srcset") or "").strip())
+            if best:
+                urls.append(abs_url(gw_url, best))
+        else:
+            src = (el.get("src") or "").strip()
+            if src:
+                urls.append(abs_url(gw_url, src))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
@@ -388,6 +412,12 @@ def gw_extract_name(soup: BeautifulSoup, gw_url: str) -> str:
     if h2:
         return norm_ws(h2.get_text(" "))
 
+    title_el = soup.select_one("title")
+    if title_el:
+        title_txt = norm_ws(title_el.get_text(" "))
+        if title_txt:
+            return title_txt
+
     path = urlparse(gw_url).path.strip("/")
     slug = path.split("/")[-1] if path else ""
     slug = re.sub(r"^\d+-", "", slug)
@@ -396,33 +426,61 @@ def gw_extract_name(soup: BeautifulSoup, gw_url: str) -> str:
 
 
 def gw_extract_price(html: str) -> Tuple[Optional[float], Optional[str]]:
+    if not html:
+        return None, None
+
     soup = BeautifulSoup(html, "lxml")
 
-    hero = soup.select_one('[data-testid="hero-product-card-price"]')
-    if hero:
-        txt = hero.get_text(" ", strip=True)
-        m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
-        if m:
-            return float(m.group(2).replace(",", ".")), m.group(1)
+    selectors = [
+        '[data-testid="hero-product-card-price"]',
+        '[data-testid="quantity-and-price-container"]',
+    ]
 
-    qty = soup.select_one('[data-testid="quantity-and-price-container"]')
-    if qty:
-        txt = qty.get_text(" ", strip=True)
-        m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
+    for sel in selectors:
+        el = soup.select_one(sel)
+        if el:
+            txt = norm_ws(el.get_text(" "))
+            m = re.search(r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)', txt)
+            if m:
+                try:
+                    return float(m.group(2).replace(",", ".")), m.group(1)
+                except Exception:
+                    pass
+
+    # fallback přes celý HTML
+    patterns = [
+        r'data-testid="hero-product-card-price".{0,1200}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'data-testid="quantity-and-price-container".{0,1200}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'<span[^>]*>\s*([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)\s*</span>',
+        r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+    ]
+
+    for pat in patterns:
+        m = re.search(pat, html, flags=re.I | re.S)
         if m:
-            return float(m.group(2).replace(",", ".")), m.group(1)
+            try:
+                return float(m.group(2).replace(",", ".")), m.group(1)
+            except Exception:
+                pass
 
     return None, None
 
-
 def gw_extract_features(soup: BeautifulSoup) -> List[str]:
-    out = []
-    for p in soup.select('[data-testid^="product-detail-feature-"]'):
-        txt = norm_ws(p.get_text(" "))
-        if txt:
-            out.append(txt)
-    return out
+    features: List[str] = []
 
+    selectors = [
+        '[data-testid^="product-detail-feature-"]',
+        '[data-testid="product-detail-features-grid"] p',
+        '[data-testid="product-detail-hero-features"] p',
+    ]
+
+    for sel in selectors:
+        for el in soup.select(sel):
+            txt = norm_ws(el.get_text(" "))
+            if txt and txt not in features:
+                features.append(txt)
+
+    return features
 
 def gw_detect_system(name: str, features: List[str], gw_url: str) -> str:
     text = " | ".join([name, gw_url] + features).lower()
@@ -485,6 +543,22 @@ def build_final_name(system: str, faction: str, product_name: str) -> str:
     system = normalize_system_name(system)
     faction = norm_ws(faction)
     product_name = clean_title(product_name)
+
+    product_low = product_name.lower()
+    system_low = system.lower()
+    faction_low = faction.lower()
+
+    # když už název začíná systémem, znovu ho nepřidávej
+    if system and product_low.startswith(system_low):
+        if faction and faction_low not in product_low:
+            return f"{product_name} - {faction}"
+        return product_name
+
+    # když už název začíná frakcí, nepřidávej frakci znovu
+    if faction and product_low.startswith(faction_low):
+        if system:
+            return f"{system}: {product_name}"
+        return product_name
 
     if system and faction:
         return f"{system}: {faction} - {product_name}"
