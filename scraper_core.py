@@ -1352,12 +1352,12 @@ def run_scraper(
         )
 
 
+         # =========================
+        # DEBUG / KONTROLA DAT
         # =========================
-# DEBUG / KONTROLA DAT
-# =========================
         if verbose:
             print("----- KONTROLA DAT -----")
-            print(f"Raw název z GW: {h1}")
+            print(f"Raw název z HP: {h1}")
             print(f"Finální název: {name_final}")
             print(f"Systém: {_system}")
             print(f"Frakce: {faction or '-'}")
@@ -1368,25 +1368,25 @@ def run_scraper(
             print(f"Počet obrázků: {len(images)}")
             print("------------------------\n")
 
-        print(f"[{idx:02d}/{total:02d}] {name_final}")
-        print(f"  HP: {hp_url}")
-        print(f"  GW: {gw_final if gw_url else '-'}")
-        print(
-            f"  type={ptype}"
-            f" | code={(code or '-')}"
-            f" | ean={(ean or '-')}"
-            f" | external={(external or '-')}"
-            f" | price={fmt_cz_money(price)}"
-            f" | gwPrice={(f'{gw_price}{gw_currency}' if gw_price is not None and gw_currency else '-')}"
-            f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
-            f" | imgs={len(images)}"
-        )
-        if images:
-            print(f"  first image: {images[0]}")
-        else:
-            print("  first image: -")
-        print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
-        print("  ✅ OK\n")
+            print(f"[{idx:02d}/{total:02d}] {name_final}")
+            print(f"  HP: {hp_url}")
+            print(f"  GW: {gw_final if gw_url else '-'}")
+            print(
+                f"  type={ptype}"
+                f" | code={(code or '-')}"
+                f" | ean={(ean or '-')}"
+                f" | external={(external or '-')}"
+                f" | price={fmt_cz_money(price)}"
+                f" | gwPrice={(f'{gw_price}{gw_currency}' if gw_price is not None and gw_currency else '-')}"
+                f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
+                f" | imgs={len(images)}"
+            )
+            if images:
+                print(f"  first image: {images[0]}")
+            else:
+                print("  first image: -")
+            print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
+            print("  ✅ OK\n")
 
         create_row: Dict[str, str] = {c: "" for c in CREATE_COLUMNS}
         create_row.update({
