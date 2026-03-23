@@ -216,6 +216,28 @@ def strip_query_and_fragment(url: str) -> str:
     p = urlparse(url)
     return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
 
+def fetch_html(
+    url: str,
+    timeout: int = 30,
+    referer: str = "",
+    headers: Optional[Dict[str, str]] = None
+) -> Tuple[str, str]:
+    hdrs = dict(headers or GW_HEADERS)
+
+    if referer:
+        hdrs["Referer"] = referer
+
+    session = requests.Session()
+
+    r = session.get(
+        url,
+        headers=hdrs,
+        timeout=timeout,
+        allow_redirects=True,
+    )
+    r.raise_for_status()
+    return (r.text or ""), str(r.url)
+
 def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
     candidates: List[str] = []
 
