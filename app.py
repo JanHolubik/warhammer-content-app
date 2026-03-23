@@ -196,6 +196,7 @@ if st.session_state["selected_engine"] == "warhammer":
                         split_out_dir=temp_split_dir,
                         split_by_type=split_by_type,
                         verbose=verbose_mode,
+                        keep_360=keep_360,
                     )
 
                     create_csv_bytes = Path(result["create_output_csv"]).read_bytes()
@@ -225,6 +226,10 @@ if st.session_state["selected_engine"] == "warhammer":
 
             st.success("Scraper proběhl úspěšně.")
             st.write("Počet produktů:", st.session_state["scraper_row_count"])
+            if verbose_mode and result.get("debug_logs"):
+                st.subheader("Kontrola dat")
+                for block in result["debug_logs"]:
+                    st.code(block)
 
             st.download_button(
                 label="Stáhnout hlavní CREATE CSV",
