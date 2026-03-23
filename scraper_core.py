@@ -740,17 +740,40 @@ def pick_best_srcset(srcset: str) -> Optional[str]:
 def extract_imgs_from_node(node: BeautifulSoup, base_url: str) -> List[str]:
     urls: List[str] = []
 
-    for img in node.select("img"):
-        src = (img.get("src") or img.get("data-src") or "").strip()
+    if node is None:
+        return urls
+
+    node_name = getattr(node, "name", None)
+
+    # Když je přímo <img>
+    if node_name == "img":
+        src = (node.get("src") or "").strip()
         if src:
             urls.append(abs_url(base_url, src))
 
-        best = pick_best_srcset((img.get("srcset") or img.get("data-srcset") or "").strip())
+        best = pick_best_srcset((node.get("srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
 
+    # Když je přímo <source>
+    if node_name == "source":
+        best = pick_best_srcset((node.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(base_url, best))
+
+    # všechny vnořené img
+    for img in node.select("img"):
+        src = (img.get("src") or "").strip()
+        if src:
+            urls.append(abs_url(base_url, src))
+
+        best = pick_best_srcset((img.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(base_url, best))
+
+    # všechny vnořené source
     for s in node.select("source"):
-        best = pick_best_srcset((s.get("srcset") or s.get("data-srcset") or "").strip())
+        best = pick_best_srcset((s.get("srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
 
@@ -850,7 +873,6 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
     except Exception:
         return url
 
-
 def extract_warhammer_gallery_urls(
     gw_url: str,
     html: str,
@@ -862,31 +884,31 @@ def extract_warhammer_gallery_urls(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) gallery buttony
-    for btn in soup.select('[data-testid="gallery-image-button"]'):
-        urls.extend(extract_imgs_from_node(btn, gw_url))
-
-    # 2) gallery itemy
-    for li in soup.select('[data-testid="gallery-image"]'):
-        urls.extend(extract_imgs_from_node(li, gw_url))
-
-    # 3) celý gallery wrapper
-    for gallery in soup.select('[data-testid="image-gallery"]'):
-        urls.extend(extract_imgs_from_node(gallery, gw_url))
-
-    # 4) carousel buttony
+    # 1) desktop carousel thumbs
     for btn in soup.select('[data-testid="image-carousel-image-button"]'):
         urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    # 5) aktivní obrázek v carouselu
+    # 2) aktivní desktop obrázek
     for node in soup.select('[data-testid="image-carousel-active-image"]'):
         urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 6) celý carousel wrapper
-    for carousel in soup.select('[data-testid="image-carousel"]'):
-        urls.extend(extract_imgs_from_node(carousel, gw_url))
+    # 3) mobile carousel wrapper
+    for node in soup.select('[data-testid="image-carousel-mobile"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 7) fallback – všechny relevantní img/source
+    # 4) mobile obrázky přímo
+    for node in soup.select('[data-testid="image-carousel-mobile-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 5) gallery buttons fallback
+    for btn in soup.select('[data-testid="gallery-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
+
+    # 6) gallery items fallback
+    for li in soup.select('[data-testid="gallery-image"]'):
+        urls.extend(extract_imgs_from_node(li, gw_url))
+
+    # 7) úplný fallback přes všechny source/img s GW path
     if not urls:
         for el in soup.select(
             'source[srcset*="/catalog/product/"], '
@@ -896,23 +918,12 @@ def extract_warhammer_gallery_urls(
             'img[src*="/app/resources/catalog/product/"], '
             'img[src*="/resources/catalog/product/"]'
         ):
-            if el.name == "source":
-                best = pick_best_srcset((el.get("srcset") or "").strip())
-                if best:
-                    urls.append(abs_url(gw_url, best))
-            else:
-                src = (el.get("src") or "").strip()
-                if src:
-                    urls.append(abs_url(gw_url, src))
+            urls.extend(extract_imgs_from_node(el, gw_url))
 
-    urls = uniq_keep_order(urls)
     urls = filter_gw_product_images(urls, keep_360=keep_360)
+    urls = uniq_keep_order(urls)
     urls = dedupe_by_filename(urls)
-
-    real_urls = keep_real_product_images(urls)
-    if real_urls:
-        urls = real_urls
-
+    urls = keep_real_product_images(urls)
     urls = urls[:max_images]
 
     if ensure_query:
@@ -920,20 +931,16 @@ def extract_warhammer_gallery_urls(
 
     return urls
 
-
 def keep_real_product_images(images: List[str]) -> List[str]:
-    """
-    Odfiltruje jen zjevné nesmysly/banner assety,
-    ale nechá LEAD, WC, sprue i threeSixty produktové obrázky.
-    """
     out: List[str] = []
 
     bad_markers = [
-        "aeronautica_imperialis",
         "landscape",
         "header",
         "banner",
         "category",
+        "missing_image",
+        "servo_skull",
     ]
 
     for u in images:
@@ -953,6 +960,7 @@ def keep_real_product_images(images: List[str]) -> List[str]:
             out.append(u)
 
     return out if out else images
+
 
 
 def extract_code_from_images(images: List[str]) -> str:
