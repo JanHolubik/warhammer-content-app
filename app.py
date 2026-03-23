@@ -211,6 +211,7 @@ if st.session_state["selected_engine"] == "warhammer":
                     st.session_state["scraper_split_files"] = result.get("split_files", [])
                     st.session_state["scraper_row_count"] = result["row_count"]
                     st.session_state["scraper_first_product_name"] = first_product_name
+                    st.session_state["scraper_debug_logs"] = result.get("debug_logs", [])
 
                     st.success("Scraper proběhl úspěšně.")
 
@@ -226,7 +227,7 @@ if st.session_state["selected_engine"] == "warhammer":
 
             st.success("Scraper proběhl úspěšně.")
             st.write("Počet produktů:", st.session_state["scraper_row_count"])
-            if verbose_mode and result.get("debug_logs"):
+            if verbose_mode and result.get("scraper_debug_logs"):
                 st.subheader("Kontrola dat")
                 for block in result["debug_logs"]:
                     st.code(block)
@@ -255,6 +256,7 @@ if st.session_state["selected_engine"] == "warhammer":
                 st.session_state["scraper_split_files"] = []
                 st.session_state["scraper_row_count"] = 0
                 st.session_state["scraper_first_product_name"] = "warhammer"
+                st.session_state["scraper_debug_logs"] = []
                 st.rerun()
 
     with tab2:
