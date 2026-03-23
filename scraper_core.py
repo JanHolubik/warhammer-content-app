@@ -75,11 +75,24 @@ BASE_HEADERS = {
 }
 
 GW_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
     "Accept-Language": "en-US,en;q=0.9",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
 }
 
 FX_RATES = {
@@ -223,11 +236,25 @@ def load_links(path: str) -> pd.DataFrame:
 # =========================
 # HELPERS
 # =========================
-def fetch_html(url: str, timeout: int = 30, referer: str = "", headers: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+def fetch_html(
+    url: str,
+    timeout: int = 30,
+    referer: str = "",
+    headers: Optional[Dict[str, str]] = None
+) -> Tuple[str, str]:
     hdrs = dict(headers or BASE_HEADERS)
+
     if referer:
         hdrs["Referer"] = referer
-    r = requests.get(url, headers=hdrs, timeout=timeout, allow_redirects=True)
+
+    session = requests.Session()
+
+    r = session.get(
+        url,
+        headers=hdrs,
+        timeout=timeout,
+        allow_redirects=True,
+    )
     r.raise_for_status()
     return (r.text or ""), str(r.url)
 
@@ -276,23 +303,30 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
     last_final = url
     last_err: Optional[Exception] = None
 
+    referers = [
+        "https://www.warhammer.com/",
+        "https://www.warhammer.com/en-US/home",
+        "",
+    ]
+
     for candidate in candidates:
-        try:
-            html, final_url = fetch_html(
-                candidate,
-                timeout=timeout,
-                referer="https://www.warhammer.com/",
-                headers=GW_HEADERS,
-            )
-            last_html, last_final = html, final_url
+        for ref in referers:
+            try:
+                html, final_url = fetch_html(
+                    candidate,
+                    timeout=timeout,
+                    referer=ref,
+                    headers=GW_HEADERS,
+                )
+                last_html, last_final = html, final_url
 
-            if looks_like_gw_product_html(html):
-                return html, final_url
+                if looks_like_gw_product_html(html):
+                    return html, final_url
 
-            log(f"GW fallback candidate loaded but markers missing: {candidate}", verbose)
-        except Exception as e:
-            last_err = e
-            log(f"GW fetch failed for {candidate}: {e}", verbose)
+                log(f"GW loaded but markers missing: {candidate} | referer={ref}", verbose)
+            except Exception as e:
+                last_err = e
+                log(f"GW fetch failed for {candidate} | referer={ref}: {e}", verbose)
 
     if last_html:
         return last_html, last_final
@@ -301,7 +335,6 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
         raise last_err
 
     return "", url
-
 
 def norm_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
