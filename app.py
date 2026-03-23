@@ -619,6 +619,8 @@ nazev_produktu:
                 st.rerun()
 
 
+    with tab4:
+        render_novinky_page()
 # =========================
 # MIG APP
 # =========================
@@ -628,6 +630,3 @@ if st.session_state["selected_engine"] == "mig":
         st.rerun()
 
     render_mig_page()
-
-    with tab4:
-        render_novinky_page()

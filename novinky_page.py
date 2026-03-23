@@ -1,12 +1,13 @@
-# novinky_page.py
 from __future__ import annotations
 
 import streamlit as st
-
 from gw_novinky_core import build_novinka_from_gw
 
 
 def render_novinky_page():
+    if "novinky_result" not in st.session_state:
+        st.session_state["novinky_result"] = None
+
     st.title("Warhammer – Novinky")
 
     st.markdown("""
@@ -61,7 +62,17 @@ def render_novinky_page():
     keep_360 = st.checkbox("Zahrnout 360 obrázky", value=False, key="novinky_keep_360")
     only_first_image = st.checkbox("Pouze první obrázek", value=False, key="novinky_only_first_image")
 
-    if st.button("Načíst z GW", key="novinky_load_btn"):
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        load_clicked = st.button("Načíst z GW", key="novinky_load_btn", use_container_width=True)
+
+    with col_b:
+        if st.button("Vymazat výstup", key="novinky_clear_btn", use_container_width=True):
+            st.session_state["novinky_result"] = None
+            st.rerun()
+
+    if load_clicked:
         if not gw_url.strip():
             st.warning("Vlož GW URL.")
         else:
@@ -76,6 +87,7 @@ def render_novinky_page():
                 st.success("Novinka byla načtena.")
             except Exception as e:
                 st.error(f"Chyba při načítání GW produktu: {e}")
+                st.exception(e)
 
     result = st.session_state.get("novinky_result")
 
