@@ -706,17 +706,21 @@ def pick_best_srcset(srcset: str) -> Optional[str]:
 
 def extract_imgs_from_node(node: BeautifulSoup, base_url: str) -> List[str]:
     urls: List[str] = []
+
     for img in node.select("img"):
-        src = (img.get("src") or "").strip()
+        src = (img.get("src") or img.get("data-src") or "").strip()
         if src:
             urls.append(abs_url(base_url, src))
-        best = pick_best_srcset((img.get("srcset") or "").strip())
+
+        best = pick_best_srcset((img.get("srcset") or img.get("data-srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
+
     for s in node.select("source"):
-        best = pick_best_srcset((s.get("srcset") or "").strip())
+        best = pick_best_srcset((s.get("srcset") or s.get("data-srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
+
     return urls
 
 
@@ -739,7 +743,7 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             path = str(u).lower()
             netloc = ""
 
-        if (not keep_360) and ("threesixty" in path or "360" in path):
+        if (not keep_360) and ("threesixty" in path):
             continue
 
         allowed = (
@@ -814,54 +818,7 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
         return url
 
 
-def scrape_gw_images_stable(
-    gw_url: str,
-    html: str,
-    max_images: int = 20,
-    keep_360: bool = False,
-    ensure_query: bool = False,
-    ensure_query_default: str = "fm=webp&w=1200&h=1237",
-) -> List[str]:
-    soup = BeautifulSoup(html, "lxml")
-    expected = expected_count_from_html(html)
-
-    base = extract_imgs_from_node(soup, gw_url)
-    base = filter_gw_product_images(base, keep_360=keep_360)
-    base = dedupe_by_filename(uniq_keep_order(base))
-
-    need_fallback = has_full_gallery_button(soup) or (expected is not None and expected > len(base))
-
-    if need_fallback:
-        modal_imgs: List[str] = []
-        for n in soup.select('[data-testid="gallery-modal-image"]'):
-            modal_imgs.extend(extract_imgs_from_node(n, gw_url))
-
-        if not modal_imgs:
-            container = soup.select_one('[data-testid="container-gallery-modal"]')
-            if container:
-                modal_imgs.extend(extract_imgs_from_node(container, gw_url))
-
-        modal_imgs = filter_gw_product_images(modal_imgs, keep_360=keep_360)
-        modal_imgs = dedupe_by_filename(uniq_keep_order(modal_imgs))
-
-        merged = modal_imgs[:] if modal_imgs else []
-        if len(merged) < len(base):
-            merged = dedupe_by_filename(uniq_keep_order(merged + base))
-    else:
-        merged = base
-
-    if expected is not None and expected > 0 and len(merged) > expected:
-        merged = merged[:expected]
-
-    merged = merged[:max_images]
-
-    if ensure_query:
-        merged = [ensure_query_defaults(u, ensure_query_default) for u in merged]
-
-    return merged
-
-
-def scrape_gw_images_fallback_simple(
+def extract_warhammer_gallery_urls(
     gw_url: str,
     html: str,
     max_images: int = 20,
@@ -872,18 +829,57 @@ def scrape_gw_images_fallback_simple(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    for meta in soup.select('meta[property="og:image"], meta[name="twitter:image"]'):
-        u = (meta.get("content") or "").strip()
-        if u:
-            urls.append(abs_url(gw_url, u))
+    # 1) gallery buttony
+    for btn in soup.select('[data-testid="gallery-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    urls.extend(extract_imgs_from_node(soup, gw_url))
+    # 2) gallery itemy
+    for li in soup.select('[data-testid="gallery-image"]'):
+        urls.extend(extract_imgs_from_node(li, gw_url))
 
-    raw_matches = re.findall(r'https://[^"\']+\.(?:jpg|jpeg|png|webp|avif)[^"\']*', html, flags=re.I)
-    urls.extend(raw_matches)
+    # 3) celý gallery wrapper
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
 
+    # 4) carousel buttony
+    for btn in soup.select('[data-testid="image-carousel-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
+
+    # 5) aktivní obrázek v carouselu
+    for node in soup.select('[data-testid="image-carousel-active-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 6) celý carousel wrapper
+    for carousel in soup.select('[data-testid="image-carousel"]'):
+        urls.extend(extract_imgs_from_node(carousel, gw_url))
+
+    # 7) fallback – všechny relevantní img/source
+    if not urls:
+        for el in soup.select(
+            'source[srcset*="/catalog/product/"], '
+            'source[srcset*="/app/resources/catalog/product/"], '
+            'source[srcset*="/resources/catalog/product/"], '
+            'img[src*="/catalog/product/"], '
+            'img[src*="/app/resources/catalog/product/"], '
+            'img[src*="/resources/catalog/product/"]'
+        ):
+            if el.name == "source":
+                best = pick_best_srcset((el.get("srcset") or "").strip())
+                if best:
+                    urls.append(abs_url(gw_url, best))
+            else:
+                src = (el.get("src") or "").strip()
+                if src:
+                    urls.append(abs_url(gw_url, src))
+
+    urls = uniq_keep_order(urls)
     urls = filter_gw_product_images(urls, keep_360=keep_360)
-    urls = dedupe_by_filename(uniq_keep_order(urls))
+    urls = dedupe_by_filename(urls)
+
+    real_urls = keep_real_product_images(urls)
+    if real_urls:
+        urls = real_urls
+
     urls = urls[:max_images]
 
     if ensure_query:
@@ -894,17 +890,16 @@ def scrape_gw_images_fallback_simple(
 
 def keep_real_product_images(images: List[str]) -> List[str]:
     """
-    Odfiltruje hero/marketing obrázky a nechá skutečné produktové fotky.
+    Odfiltruje jen zjevné nesmysly/banner assety,
+    ale nechá LEAD, WC, sprue i threeSixty produktové obrázky.
     """
     out: List[str] = []
 
     bad_markers = [
         "aeronautica_imperialis",
         "landscape",
-        "hero",
         "header",
         "banner",
-        "carousel",
         "category",
     ]
 
@@ -924,7 +919,6 @@ def keep_real_product_images(images: List[str]) -> List[str]:
         if looks_product_like:
             out.append(u)
 
-    # fallback: když po filtrování nic nezbyde, vrať původní seznam
     return out if out else images
 
 
