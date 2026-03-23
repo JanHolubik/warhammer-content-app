@@ -1351,6 +1351,23 @@ def run_scraper(
             else None
         )
 
+
+        # =========================
+# DEBUG / KONTROLA DAT
+# =========================
+    if verbose:
+        print("----- KONTROLA DAT -----")
+        print(f"Raw název z GW: {h1}")
+        print(f"Finální název: {name_final}")
+        print(f"Systém: {_system}")
+        print(f"Frakce: {faction or '-'}")
+        print(f"Typ produktu: {ptype}")
+        print(f"Code: {code or '-'}")
+        print(f"Standardní cena: {fmt_cz_money(std_price)} Kč")
+        print(f"Prodejní cena: {fmt_cz_money(price)} Kč")
+        print(f"Počet obrázků: {len(images)}")
+        print("------------------------\n")
+
         print(f"[{idx:02d}/{total:02d}] {name_final}")
         print(f"  HP: {hp_url}")
         print(f"  GW: {gw_final if gw_url else '-'}")
