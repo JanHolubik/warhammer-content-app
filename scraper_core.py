@@ -799,7 +799,15 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             path = str(u).lower()
             netloc = ""
 
-        if (not keep_360) and ("threesixty" in path):
+        # POZOR:
+        # nepoužívat jen "360" in path
+        # protože GW má 360 i uvnitř názvů souborů (např. AoSWarcry18360)
+        is_real_360_path = (
+            "/threesixty/" in path
+            or "/threeSixty/" in (p.path or "")
+        )
+
+        if (not keep_360) and is_real_360_path:
             continue
 
         allowed = (
@@ -872,8 +880,8 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
         return urlunparse((p.scheme, p.netloc, p.path, p.params, default_q, p.fragment))
     except Exception:
         return url
-
-def extract_warhammer_gallery_urls(
+    
+def scrape_gw_images_stable(
     gw_url: str,
     html: str,
     max_images: int = 20,
@@ -884,46 +892,29 @@ def extract_warhammer_gallery_urls(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) desktop carousel thumbs
-    for btn in soup.select('[data-testid="image-carousel-image-button"]'):
-        urls.extend(extract_imgs_from_node(btn, gw_url))
+    selectors = [
+        '[data-testid="image-carousel-image-button"]',
+        '[data-testid="image-carousel-active-image"]',
+        '[data-testid="gallery-image-button"]',
+        '[data-testid="gallery-image"]',
+        '[data-testid="image-gallery"]',
+        '[data-testid="image-carousel-mobile"]',
+        '[data-testid="image-carousel-mobile-image"]',
+    ]
 
-    # 2) aktivní desktop obrázek
-    for node in soup.select('[data-testid="image-carousel-active-image"]'):
-        urls.extend(extract_imgs_from_node(node, gw_url))
+    for sel in selectors:
+        for node in soup.select(sel):
+            urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 3) mobile carousel wrapper
-    for node in soup.select('[data-testid="image-carousel-mobile"]'):
-        urls.extend(extract_imgs_from_node(node, gw_url))
-
-    # 4) mobile obrázky přímo
-    for node in soup.select('[data-testid="image-carousel-mobile-image"]'):
-        urls.extend(extract_imgs_from_node(node, gw_url))
-
-    # 5) gallery buttons fallback
-    for btn in soup.select('[data-testid="gallery-image-button"]'):
-        urls.extend(extract_imgs_from_node(btn, gw_url))
-
-    # 6) gallery items fallback
-    for li in soup.select('[data-testid="gallery-image"]'):
-        urls.extend(extract_imgs_from_node(li, gw_url))
-
-    # 7) úplný fallback přes všechny source/img s GW path
+    # fallback: vezmi všechny img/source z dokumentu
     if not urls:
-        for el in soup.select(
-            'source[srcset*="/catalog/product/"], '
-            'source[srcset*="/app/resources/catalog/product/"], '
-            'source[srcset*="/resources/catalog/product/"], '
-            'img[src*="/catalog/product/"], '
-            'img[src*="/app/resources/catalog/product/"], '
-            'img[src*="/resources/catalog/product/"]'
-        ):
-            urls.extend(extract_imgs_from_node(el, gw_url))
+        urls.extend(extract_imgs_from_node(soup, gw_url))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
     urls = dedupe_by_filename(urls)
     urls = keep_real_product_images(urls)
+
     urls = urls[:max_images]
 
     if ensure_query:
@@ -935,12 +926,11 @@ def keep_real_product_images(images: List[str]) -> List[str]:
     out: List[str] = []
 
     bad_markers = [
+        "aeronautica_imperialis",
         "landscape",
         "header",
         "banner",
         "category",
-        "missing_image",
-        "servo_skull",
     ]
 
     for u in images:
@@ -960,7 +950,6 @@ def keep_real_product_images(images: List[str]) -> List[str]:
             out.append(u)
 
     return out if out else images
-
 
 
 def extract_code_from_images(images: List[str]) -> str:
