@@ -10,7 +10,7 @@ from docx import Document
 from filler_core import run_filler
 from scraper_core import run_scraper
 from mig_page import render_mig_page
-
+from novinky_page import render_novinky_page
 
 PROMPT_TEMPLATE_DIR = Path("prompt_templates")
 TEMPLATE_DIR_DEFAULT = "sablony"
@@ -129,7 +129,7 @@ if st.session_state["selected_engine"] == "warhammer":
         st.session_state["selected_engine"] = None
         st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Scraper", "Prompt", "Fill", "Novinky"])
 
     with tab1:
         st.header("Scraper")
@@ -628,3 +628,6 @@ if st.session_state["selected_engine"] == "mig":
         st.rerun()
 
     render_mig_page()
+
+    with tab4:
+        render_novinky_page()
