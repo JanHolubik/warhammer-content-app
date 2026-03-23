@@ -153,6 +153,12 @@ if st.session_state["selected_engine"] == "warhammer":
             key="scraper_split_by_type",
         )
 
+        keep_360 = st.checkbox(
+            "Zahrnout 360° obrázky",
+            value=False,
+            key="scraper_keep_360",
+        )
+
         verbose_mode = st.checkbox(
             "Verbose log",
             value=True,
