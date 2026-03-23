@@ -126,7 +126,7 @@ FACTION_ALIASES = {
     "Aeldari": ["aeldari", "eldar"],
     "Drukhari": ["drukhari", "dark eldar"],
     "Adepta Sororitas": ["adepta sororitas", "sisters of battle"],
-    "Astra Militarum": ["astra militarum", "imperial guard"],
+    "Astra Militarum": ["astra militarum", "imperial guard", "cadian", "catachan", "death korps"],
     "Imperial Knights": ["imperial knights", "questor imperialis"],
     "Space Marines": ["space marines", "adeptus astartes"],
     "Emperor's Children": ["emperor's children", "emperors children"],
@@ -245,6 +245,9 @@ def looks_like_gw_product_html(html: str) -> bool:
         'data-testid="quantity-and-price-container"',
         'data-testid="gallery-modal-image"',
         'data-testid="button-gallery-view-full"',
+        'data-testid="image-carousel-image-button"',
+        'data-testid="gallery-image-button"',
+        'data-testid="image-gallery"',
         "/app/resources/catalog/product/",
         "Missing_Image_Servo_Skull",
     ]
@@ -586,6 +589,22 @@ def extract_relevant_gw_faction_text(gw_html: str) -> str:
         if txt:
             parts.append(txt)
 
+    for el in soup.select('[data-testid="gallery-image-button"]'):
+        title = norm_ws(el.get("title") or "")
+        aria = norm_ws(el.get("aria-label") or "")
+        if title:
+            parts.append(title)
+        if aria:
+            parts.append(aria)
+
+    for el in soup.select('[data-testid="image-carousel-image-button"]'):
+        title = norm_ws(el.get("title") or "")
+        aria = norm_ws(el.get("aria-label") or "")
+        if title:
+            parts.append(title)
+        if aria:
+            parts.append(aria)
+
     if soup.title:
         txt = norm_ws(soup.title.get_text(" "))
         if txt:
@@ -637,25 +656,34 @@ def gw_extract_price(gw_html: str) -> Tuple[Optional[float], Optional[str]]:
     try:
         soup = BeautifulSoup(gw_html, "lxml")
 
-        hero = soup.select_one('[data-testid="hero-product-card-price"]')
-        if hero:
-            txt = hero.get_text(" ", strip=True)
-            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
+        selectors = [
+            '[data-testid="hero-product-card-price"]',
+            '[data-testid="quantity-and-price-container"]',
+        ]
+
+        for sel in selectors:
+            el = soup.select_one(sel)
+            if not el:
+                continue
+
+            txt = norm_ws(el.get_text(" "))
+            m = re.search(r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)', txt)
             if m:
                 return float(m.group(2).replace(",", ".")), m.group(1)
 
-        qty = soup.select_one('[data-testid="quantity-and-price-container"]')
-        if qty:
-            txt = qty.get_text(" ", strip=True)
-            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
-            if m:
-                return float(m.group(2).replace(",", ".")), m.group(1)
+            spans = el.select("span")
+            for sp in spans:
+                sp_txt = norm_ws(sp.get_text(" "))
+                m2 = re.search(r'^([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)$', sp_txt)
+                if m2:
+                    return float(m2.group(2).replace(",", ".")), m2.group(1)
     except Exception:
         pass
 
     patterns = [
-        r'data-testid="hero-product-card-price".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'data-testid="quantity-and-price-container".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'data-testid="hero-product-card-price".{0,1500}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'data-testid="quantity-and-price-container".{0,1500}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'<span[^>]*>\s*([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)\s*</span>',
         r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
     ]
     for pat in patterns:
@@ -881,11 +909,30 @@ def extract_warhammer_gallery_urls(
         )
     )
 
+    urls.extend(
+        collect_urls_from_selectors(
+            soup,
+            gw_url,
+            ['[data-testid="image-carousel-active-image"]']
+        )
+    )
+
+    urls.extend(
+        collect_urls_from_selectors(
+            soup,
+            gw_url,
+            ['[data-testid="image-gallery"]']
+        )
+    )
+
     if not urls:
         for img in soup.select('img[data-testid="image-carousel-desktop-image"]'):
             src = (img.get("src") or "").strip()
             if src:
                 urls.append(abs_url(gw_url, src))
+
+    if not urls:
+        urls.extend(extract_imgs_from_node(soup, gw_url))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = dedupe_by_filename(uniq_keep_order(urls))
