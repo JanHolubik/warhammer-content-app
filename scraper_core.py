@@ -882,62 +882,51 @@ def extract_warhammer_gallery_urls(
     ensure_query_default: str = "fm=webp&w=1200&h=1237",
 ) -> List[str]:
     soup = BeautifulSoup(html, "lxml")
-
     urls: List[str] = []
 
-    urls.extend(
-        collect_urls_from_selectors(
-            soup,
-            gw_url,
-            ['button[data-testid="image-carousel-image-button"]']
-        )
-    )
+    # 1) carousel thumb tlačítka
+    for btn in soup.select('[data-testid="image-carousel-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    urls.extend(
-        collect_urls_from_selectors(
-            soup,
-            gw_url,
-            ['button[data-testid="gallery-image-button"]']
-        )
-    )
+    # 2) aktivní obrázek
+    for node in soup.select('[data-testid="image-carousel-active-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
 
-    urls.extend(
-        collect_urls_from_selectors(
-            soup,
-            gw_url,
-            ['li[data-testid="gallery-image"]']
-        )
-    )
+    # 3) gallery tlačítka
+    for btn in soup.select('[data-testid="gallery-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    urls.extend(
-        collect_urls_from_selectors(
-            soup,
-            gw_url,
-            ['[data-testid="image-carousel-active-image"]']
-        )
-    )
+    # 4) gallery items
+    for li in soup.select('[data-testid="gallery-image"]'):
+        urls.extend(extract_imgs_from_node(li, gw_url))
 
-    urls.extend(
-        collect_urls_from_selectors(
-            soup,
-            gw_url,
-            ['[data-testid="image-gallery"]']
-        )
-    )
+    # 5) celé gallery wrappery
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
 
+    # 6) fallback: všechny relevantní source/img z dokumentu
     if not urls:
-        for img in soup.select('img[data-testid="image-carousel-desktop-image"]'):
-            src = (img.get("src") or "").strip()
-            if src:
-                urls.append(abs_url(gw_url, src))
-
-    if not urls:
-        urls.extend(extract_imgs_from_node(soup, gw_url))
+        for el in soup.select(
+            'source[srcset*="/catalog/product/"], '
+            'source[srcset*="/app/resources/catalog/product/"], '
+            'source[srcset*="/resources/catalog/product/"], '
+            'img[src*="/catalog/product/"], '
+            'img[src*="/app/resources/catalog/product/"], '
+            'img[src*="/resources/catalog/product/"]'
+        ):
+            if el.name == "source":
+                best = pick_best_srcset((el.get("srcset") or "").strip())
+                if best:
+                    urls.append(abs_url(gw_url, best))
+            else:
+                src = (el.get("src") or "").strip()
+                if src:
+                    urls.append(abs_url(gw_url, src))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
-    urls = dedupe_by_filename(uniq_keep_order(urls))
+    urls = uniq_keep_order(urls)
+    urls = dedupe_by_filename(urls)
     urls = keep_real_product_images(urls)
-
     urls = urls[:max_images]
 
     if ensure_query:
@@ -962,7 +951,18 @@ def scrape_gw_images_stable(
         ensure_query=ensure_query,
         ensure_query_default=ensure_query_default,
     )
-    return urls
+
+    if urls:
+        return urls
+
+    return scrape_gw_images_fallback_simple(
+        gw_url=gw_url,
+        html=html,
+        max_images=max_images,
+        keep_360=keep_360,
+        ensure_query=ensure_query,
+        ensure_query_default=ensure_query_default,
+    )
 
 
 def scrape_gw_images_fallback_simple(
@@ -1036,13 +1036,27 @@ def keep_real_product_images(images: List[str]) -> List[str]:
 
 def extract_code_from_images(images: List[str]) -> str:
     """
-    Pokusí se vytáhnout produktový kód z GW obrázků.
-    Např. 99120206012_SkavenHellPitAbomination...
+    Priorita:
+    1) normální produktové obrázky
+    2) až potom threeSixty
     """
+    normal: List[str] = []
+    spin: List[str] = []
+
     for u in images:
+        low = u.lower()
+        if "threesixty" in low:
+            spin.append(u)
+        else:
+            normal.append(u)
+
+    ordered = normal + spin
+
+    for u in ordered:
         m = re.search(r"/(\d{8,14})_[^/]+(?:\.jpg|\.jpeg|\.png|\.webp|\.avif)", u, flags=re.I)
         if m:
             return m.group(1)
+
     return ""
 
 
