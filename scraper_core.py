@@ -126,7 +126,7 @@ FACTION_ALIASES = {
     "Aeldari": ["aeldari", "eldar"],
     "Drukhari": ["drukhari", "dark eldar"],
     "Adepta Sororitas": ["adepta sororitas", "sisters of battle"],
-    "Astra Militarum": ["astra militarum", "imperial guard", "cadian", "catachan", "death korps"],
+    "Astra Militarum": ["astra militarum", "imperial guard"],
     "Imperial Knights": ["imperial knights", "questor imperialis"],
     "Space Marines": ["space marines", "adeptus astartes"],
     "Emperor's Children": ["emperor's children", "emperors children"],
@@ -589,22 +589,6 @@ def extract_relevant_gw_faction_text(gw_html: str) -> str:
         if txt:
             parts.append(txt)
 
-    for el in soup.select('[data-testid="gallery-image-button"]'):
-        title = norm_ws(el.get("title") or "")
-        aria = norm_ws(el.get("aria-label") or "")
-        if title:
-            parts.append(title)
-        if aria:
-            parts.append(aria)
-
-    for el in soup.select('[data-testid="image-carousel-image-button"]'):
-        title = norm_ws(el.get("title") or "")
-        aria = norm_ws(el.get("aria-label") or "")
-        if title:
-            parts.append(title)
-        if aria:
-            parts.append(aria)
-
     if soup.title:
         txt = norm_ws(soup.title.get_text(" "))
         if txt:
@@ -656,34 +640,25 @@ def gw_extract_price(gw_html: str) -> Tuple[Optional[float], Optional[str]]:
     try:
         soup = BeautifulSoup(gw_html, "lxml")
 
-        selectors = [
-            '[data-testid="hero-product-card-price"]',
-            '[data-testid="quantity-and-price-container"]',
-        ]
-
-        for sel in selectors:
-            el = soup.select_one(sel)
-            if not el:
-                continue
-
-            txt = norm_ws(el.get_text(" "))
-            m = re.search(r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)', txt)
+        hero = soup.select_one('[data-testid="hero-product-card-price"]')
+        if hero:
+            txt = hero.get_text(" ", strip=True)
+            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
             if m:
                 return float(m.group(2).replace(",", ".")), m.group(1)
 
-            spans = el.select("span")
-            for sp in spans:
-                sp_txt = norm_ws(sp.get_text(" "))
-                m2 = re.search(r'^([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)$', sp_txt)
-                if m2:
-                    return float(m2.group(2).replace(",", ".")), m2.group(1)
+        qty = soup.select_one('[data-testid="quantity-and-price-container"]')
+        if qty:
+            txt = qty.get_text(" ", strip=True)
+            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
+            if m:
+                return float(m.group(2).replace(",", ".")), m.group(1)
     except Exception:
         pass
 
     patterns = [
-        r'data-testid="hero-product-card-price".{0,1500}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'data-testid="quantity-and-price-container".{0,1500}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'<span[^>]*>\s*([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)\s*</span>',
+        r'data-testid="hero-product-card-price".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'data-testid="quantity-and-price-container".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
         r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
     ]
     for pat in patterns:
@@ -775,9 +750,6 @@ def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
             or "/catalog/product/" in path
             or "/media/catalog/product/" in path
             or "/resources/catalog/product/" in path
-            or "/app/resources/catalog/product/threesixty/" in path
-            or "/catalog/product/threesixty/" in path
-            or "/resources/catalog/product/threesixty/" in path
         )
 
         looks_like_image = any(ext in path for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"])
@@ -842,99 +814,6 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
         return url
 
 
-def get_best_picture_url(node: BeautifulSoup, base_url: str) -> Optional[str]:
-    if node is None:
-        return None
-
-    source = node.select_one("picture source[srcset]")
-    if source:
-        best = pick_best_srcset((source.get("srcset") or "").strip())
-        if best:
-            return abs_url(base_url, best)
-
-    img = node.select_one("picture img[src], img[src]")
-    if img:
-        src = (img.get("src") or "").strip()
-        if src:
-            return abs_url(base_url, src)
-
-    return None
-
-
-def collect_urls_from_selectors(soup: BeautifulSoup, base_url: str, selectors: List[str]) -> List[str]:
-    urls: List[str] = []
-
-    for sel in selectors:
-        for node in soup.select(sel):
-            u = get_best_picture_url(node, base_url)
-            if u:
-                urls.append(u)
-
-    return urls
-
-
-def extract_warhammer_gallery_urls(
-    gw_url: str,
-    html: str,
-    max_images: int = 20,
-    keep_360: bool = False,
-    ensure_query: bool = False,
-    ensure_query_default: str = "fm=webp&w=1200&h=1237",
-) -> List[str]:
-    soup = BeautifulSoup(html, "lxml")
-    urls: List[str] = []
-
-    # 1) carousel thumb tlačítka
-    for btn in soup.select('[data-testid="image-carousel-image-button"]'):
-        urls.extend(extract_imgs_from_node(btn, gw_url))
-
-    # 2) aktivní obrázek
-    for node in soup.select('[data-testid="image-carousel-active-image"]'):
-        urls.extend(extract_imgs_from_node(node, gw_url))
-
-    # 3) gallery tlačítka
-    for btn in soup.select('[data-testid="gallery-image-button"]'):
-        urls.extend(extract_imgs_from_node(btn, gw_url))
-
-    # 4) gallery items
-    for li in soup.select('[data-testid="gallery-image"]'):
-        urls.extend(extract_imgs_from_node(li, gw_url))
-
-    # 5) celé gallery wrappery
-    for gallery in soup.select('[data-testid="image-gallery"]'):
-        urls.extend(extract_imgs_from_node(gallery, gw_url))
-
-    # 6) fallback: všechny relevantní source/img z dokumentu
-    if not urls:
-        for el in soup.select(
-            'source[srcset*="/catalog/product/"], '
-            'source[srcset*="/app/resources/catalog/product/"], '
-            'source[srcset*="/resources/catalog/product/"], '
-            'img[src*="/catalog/product/"], '
-            'img[src*="/app/resources/catalog/product/"], '
-            'img[src*="/resources/catalog/product/"]'
-        ):
-            if el.name == "source":
-                best = pick_best_srcset((el.get("srcset") or "").strip())
-                if best:
-                    urls.append(abs_url(gw_url, best))
-            else:
-                src = (el.get("src") or "").strip()
-                if src:
-                    urls.append(abs_url(gw_url, src))
-
-    urls = filter_gw_product_images(urls, keep_360=keep_360)
-    urls = uniq_keep_order(urls)
-    urls = dedupe_by_filename(urls)
-    urls = keep_real_product_images(urls)
-    urls = urls[:max_images]
-
-    if ensure_query:
-        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
-
-    return urls
-
-
 def scrape_gw_images_stable(
     gw_url: str,
     html: str,
@@ -943,26 +822,43 @@ def scrape_gw_images_stable(
     ensure_query: bool = False,
     ensure_query_default: str = "fm=webp&w=1200&h=1237",
 ) -> List[str]:
-    urls = extract_warhammer_gallery_urls(
-        gw_url=gw_url,
-        html=html,
-        max_images=max_images,
-        keep_360=keep_360,
-        ensure_query=ensure_query,
-        ensure_query_default=ensure_query_default,
-    )
+    soup = BeautifulSoup(html, "lxml")
+    expected = expected_count_from_html(html)
 
-    if urls:
-        return urls
+    base = extract_imgs_from_node(soup, gw_url)
+    base = filter_gw_product_images(base, keep_360=keep_360)
+    base = dedupe_by_filename(uniq_keep_order(base))
 
-    return scrape_gw_images_fallback_simple(
-        gw_url=gw_url,
-        html=html,
-        max_images=max_images,
-        keep_360=keep_360,
-        ensure_query=ensure_query,
-        ensure_query_default=ensure_query_default,
-    )
+    need_fallback = has_full_gallery_button(soup) or (expected is not None and expected > len(base))
+
+    if need_fallback:
+        modal_imgs: List[str] = []
+        for n in soup.select('[data-testid="gallery-modal-image"]'):
+            modal_imgs.extend(extract_imgs_from_node(n, gw_url))
+
+        if not modal_imgs:
+            container = soup.select_one('[data-testid="container-gallery-modal"]')
+            if container:
+                modal_imgs.extend(extract_imgs_from_node(container, gw_url))
+
+        modal_imgs = filter_gw_product_images(modal_imgs, keep_360=keep_360)
+        modal_imgs = dedupe_by_filename(uniq_keep_order(modal_imgs))
+
+        merged = modal_imgs[:] if modal_imgs else []
+        if len(merged) < len(base):
+            merged = dedupe_by_filename(uniq_keep_order(merged + base))
+    else:
+        merged = base
+
+    if expected is not None and expected > 0 and len(merged) > expected:
+        merged = merged[:expected]
+
+    merged = merged[:max_images]
+
+    if ensure_query:
+        merged = [ensure_query_defaults(u, ensure_query_default) for u in merged]
+
+    return merged
 
 
 def scrape_gw_images_fallback_simple(
@@ -1023,73 +919,25 @@ def keep_real_product_images(images: List[str]) -> List[str]:
             or "/app/resources/catalog/product/" in low
             or "/media/catalog/product/" in low
             or "/resources/catalog/product/" in low
-            or "/catalog/product/threesixty/" in low
-            or "/app/resources/catalog/product/threesixty/" in low
-            or "/resources/catalog/product/threesixty/" in low
         )
 
         if looks_product_like:
             out.append(u)
 
+    # fallback: když po filtrování nic nezbyde, vrať původní seznam
     return out if out else images
 
 
 def extract_code_from_images(images: List[str]) -> str:
     """
-    Lepší heuristika pro GW:
-    1) sesbírá všechny kódy z obrázků
-    2) preferuje ne-LEAD / ne-marketing obrázky
-    3) vezme nejčastější kód
-    4) fallback na první nalezený
+    Pokusí se vytáhnout produktový kód z GW obrázků.
+    Např. 99120206012_SkavenHellPitAbomination...
     """
-    candidates: List[Tuple[str, int]] = []
-
     for u in images:
-        low = u.lower()
-
         m = re.search(r"/(\d{8,14})_[^/]+(?:\.jpg|\.jpeg|\.png|\.webp|\.avif)", u, flags=re.I)
-        if not m:
-            continue
-
-        code = m.group(1)
-
-        score = 0
-
-        # normální produktové obrázky
-        if "threesixty" not in low:
-            score += 3
-
-        # nechceme LEAD marketing obrázek jako hlavní prioritu
-        if "lead" not in low:
-            score += 3
-
-        # sprue / produktové doplňkové obrázky často nesou reálnější produktový kód
-        if "sprue" in low:
-            score += 2
-
-        # WC product shots také bývají užitečné
-        if "_wc" in low or "wc" in Path(urlparse(strip_query(u)).path).name.lower():
-            score += 1
-
-        candidates.append((code, score))
-
-    if not candidates:
-        return ""
-
-    # sečti score pro každý kód
-    totals: Dict[str, int] = {}
-    counts: Dict[str, int] = {}
-
-    for code, score in candidates:
-        totals[code] = totals.get(code, 0) + score
-        counts[code] = counts.get(code, 0) + 1
-
-    # bonus za opakování stejného kódu
-    for code, cnt in counts.items():
-        totals[code] += cnt * 2
-
-    best_code = sorted(totals.items(), key=lambda x: (-x[1], x[0]))[0][0]
-    return best_code
+        if m:
+            return m.group(1)
+    return ""
 
 
 # =========================
@@ -1234,6 +1082,7 @@ def run_scraper(
     create_rows: List[Dict[str, str]] = []
     source_rows: List[Dict[str, str]] = []
     processed_files: List[str] = []
+    debug_logs: List[str] = []
 
     split_dir = Path(split_out_dir).expanduser() if split_out_dir else None
     if split_dir:
@@ -1246,11 +1095,7 @@ def run_scraper(
         hp_url = str(r["hp_url"]).strip()
         gw_url = str(r["gw_url"]).strip()
 
-        hp_html, _hp_final = fetch_html(
-            hp_url,
-            referer="https://www.herniprostor.cz/",
-            headers=BASE_HEADERS
-        )
+        hp_html, _hp_final = fetch_html(hp_url, referer="https://www.herniprostor.cz/", headers=BASE_HEADERS)
         hp_soup = BeautifulSoup(hp_html, "html.parser")
 
         h1_raw = hp_extract_h1(hp_soup)
@@ -1345,48 +1190,43 @@ def run_scraper(
         xml_feed_name = make_xml_feed_name_from_name(name_final)
         seo_title = make_seo_title_from_name(name_final)
 
-        std_price = (
-            round(gw_price * FX_RATES[gw_currency], 2)
-            if (gw_price is not None and gw_currency in FX_RATES)
-            else None
-        )
+        std_price = round(gw_price * FX_RATES[gw_currency], 2) if (gw_price is not None and gw_currency in FX_RATES) else None
 
-
-         # =========================
-        # DEBUG / KONTROLA DAT
-        # =========================
         if verbose:
-            print("----- KONTROLA DAT -----")
-            print(f"Raw název z HP: {h1}")
-            print(f"Finální název: {name_final}")
-            print(f"Systém: {_system}")
-            print(f"Frakce: {faction or '-'}")
-            print(f"Typ produktu: {ptype}")
-            print(f"Code: {code or '-'}")
-            print(f"Standardní cena: {fmt_cz_money(std_price)} Kč")
-            print(f"Prodejní cena: {fmt_cz_money(price)} Kč")
-            print(f"Počet obrázků: {len(images)}")
-            print("------------------------\n")
+            debug_block = f"""----- KONTROLA DAT -----
+Raw název z GW: {h1}
+Finální název: {name_final}
+Systém: {_system}
+Frakce: {faction or '-'}
+Typ produktu: {ptype}
+Code: {code or '-'}
+Standardní cena: {fmt_cz_money(std_price)} Kč
+Prodejní cena: {fmt_cz_money(price)} Kč
+Počet obrázků: {len(images)}
+------------------------
+"""
+            print(debug_block)
+            debug_logs.append(debug_block)
 
-            print(f"[{idx:02d}/{total:02d}] {name_final}")
-            print(f"  HP: {hp_url}")
-            print(f"  GW: {gw_final if gw_url else '-'}")
-            print(
-                f"  type={ptype}"
-                f" | code={(code or '-')}"
-                f" | ean={(ean or '-')}"
-                f" | external={(external or '-')}"
-                f" | price={fmt_cz_money(price)}"
-                f" | gwPrice={(f'{gw_price}{gw_currency}' if gw_price is not None and gw_currency else '-')}"
-                f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
-                f" | imgs={len(images)}"
-            )
-            if images:
-                print(f"  first image: {images[0]}")
-            else:
-                print("  first image: -")
-            print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
-            print("  ✅ OK\n")
+        print(f"[{idx:02d}/{total:02d}] {name_final}")
+        print(f"  HP: {hp_url}")
+        print(f"  GW: {gw_final if gw_url else '-'}")
+        print(
+            f"  type={ptype}"
+            f" | code={(code or '-')}"
+            f" | ean={(ean or '-')}"
+            f" | external={(external or '-')}"
+            f" | price={fmt_cz_money(price)}"
+            f" | gwPrice={(f'{gw_price}{gw_currency}' if gw_price is not None and gw_currency else '-')}"
+            f" | stdPrice={(fmt_cz_money(std_price) if std_price is not None else '-')}"
+            f" | imgs={len(images)}"
+        )
+        if images:
+            print(f"  first image: {images[0]}")
+        else:
+            print("  first image: -")
+        print(f"  templates: short={short_tpl_name} | detail={detail_tpl_name}")
+        print("  ✅ OK\n")
 
         create_row: Dict[str, str] = {c: "" for c in CREATE_COLUMNS}
         create_row.update({
@@ -1483,23 +1323,11 @@ def run_scraper(
 
     create_df = pd.DataFrame(create_rows, columns=CREATE_COLUMNS)
     create_df = create_df.reindex(columns=CREATE_COLUMNS, fill_value="")
-    create_df.to_csv(
-        create_output_path,
-        sep=";",
-        index=False,
-        encoding="utf-8-sig",
-        quoting=csv.QUOTE_ALL
-    )
+    create_df.to_csv(create_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
 
     source_df = pd.DataFrame(source_rows, columns=SOURCE_COLUMNS)
     source_df = source_df.reindex(columns=SOURCE_COLUMNS, fill_value="")
-    source_df.to_csv(
-        source_output_path,
-        sep=";",
-        index=False,
-        encoding="utf-8-sig",
-        quoting=csv.QUOTE_ALL
-    )
+    source_df.to_csv(source_output_path, sep=";", index=False, encoding="utf-8-sig", quoting=csv.QUOTE_ALL)
 
     print(f"\nOK: saved CREATE {create_output_path} ({len(create_df)} rows)")
     print(f"OK: saved SOURCE {source_output_path} ({len(source_df)} rows)")
@@ -1514,4 +1342,5 @@ def run_scraper(
         "create_rows": create_rows,
         "source_rows": source_rows,
         "split_files": processed_files,
+        "debug_logs": debug_logs,
     }

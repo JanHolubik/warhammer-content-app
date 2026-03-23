@@ -10,7 +10,6 @@ from docx import Document
 from filler_core import run_filler
 from scraper_core import run_scraper
 from mig_page import render_mig_page
-from novinky_page import render_novinky_page
 
 
 PROMPT_TEMPLATE_DIR = Path("prompt_templates")
@@ -58,7 +57,7 @@ if "scraper_first_product_name" not in st.session_state:
     st.session_state["scraper_first_product_name"] = "warhammer"
 
 if "scraper_debug_logs" not in st.session_state:
-    st.session_state["scraper_debug_logs"] = []    
+    st.session_state["scraper_debug_logs"] = []
 
 st.markdown("""
 <style>
@@ -130,7 +129,7 @@ if st.session_state["selected_engine"] == "warhammer":
         st.session_state["selected_engine"] = None
         st.rerun()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Scraper", "Prompt", "Fill", "Novinky"])
+    tab1, tab2, tab3 = st.tabs(["Scraper", "Prompt", "Fill"])
 
     with tab1:
         st.header("Scraper")
@@ -252,6 +251,8 @@ if st.session_state["selected_engine"] == "warhammer":
                 key="download_main_scraper_source_csv_persistent",
             )
 
+        
+
             if st.button("Vymazat výstupy scraperu", key="clear_scraper_outputs"):
                 st.session_state["scraper_create_csv_bytes"] = None
                 st.session_state["scraper_source_csv_bytes"] = None
@@ -272,38 +273,22 @@ if st.session_state["selected_engine"] == "warhammer":
 
         product_name = ""
         product_ean = ""
-        product_gw_url = ""
 
         if uploaded_split_csv is not None:
             try:
                 df_preview = pd.read_csv(uploaded_split_csv, sep=";", dtype=str).fillna("")
-                df_preview.columns = [str(c).strip() for c in df_preview.columns]
 
                 if not df_preview.empty:
-                    row_for_prompt = df_preview.iloc[0]
-
-                    if "gw_url" in df_preview.columns:
-                        non_empty_gw = df_preview[
-                            df_preview["gw_url"].astype(str).str.strip() != ""
-                        ]
-                        if not non_empty_gw.empty:
-                            row_for_prompt = non_empty_gw.iloc[0]
-
                     name_col = "name:cs" if "name:cs" in df_preview.columns else "name"
-                    product_name = row_for_prompt.get(name_col, "")
-                    product_ean = row_for_prompt.get("ean", "")
-
+                    product_name = df_preview.iloc[0].get(name_col, "")
+                    product_ean = df_preview.iloc[0].get("ean", "")
                     if not str(product_ean).strip():
-                        product_ean = row_for_prompt.get("externalCode", "")
+                        product_ean = df_preview.iloc[0].get("externalCode", "")
                     if not str(product_ean).strip():
-                        product_ean = row_for_prompt.get("code", "")
-
-                    product_gw_url = row_for_prompt.get("gw_url", "")
+                        product_ean = df_preview.iloc[0].get("code", "")
 
                     st.info(f"Produkt: {product_name}")
-                    st.write(f"EAN / Code: {product_ean}")
-                    if str(product_gw_url).strip():
-                        st.write(f"GW URL: {product_gw_url}")
+                    st.write(f"EAN: {product_ean}")
 
             except Exception as e:
                 st.warning(f"Nepodařilo se načíst CSV: {e}")
@@ -351,9 +336,6 @@ PRODUKT
 
 EAN
 {product_ean}
-
-GW URL
-{product_gw_url}
 --------------------------------------------------
 """
 
@@ -415,27 +397,27 @@ GW URL
                 height=50,
             )
 
-        st.text_area(
+        st.subheader("⬇ VLOŽ SEM AI OUTPUT")
+
+        ai_output = st.text_area(
             "AI Output",
             height=400,
             key="prompt_ai_output",
             placeholder="""
-        [LANG=cs]
-        nazev_produktu:
-        ...
+[LANG=cs]
+nazev_produktu:
+...
 
-        [LANG=en]
-        ...
+[LANG=en]
+...
 
-        [LANG=sk]
-        ...
-        """,
+[LANG=sk]
+...
+""",
         )
 
-        ai_output_value = st.session_state.get("prompt_ai_output", "")
-
-        if str(ai_output_value).strip():
-            prompt_docx_bytes = make_docx_bytes(ai_output_value)
+        if ai_output.strip():
+            prompt_docx_bytes = make_docx_bytes(ai_output)
 
             st.download_button(
                 label="Stáhnout vystup_prompt.docx",
@@ -635,9 +617,6 @@ GW URL
                 st.session_state["create_csv_bytes"] = None
                 st.session_state["fill_product_name"] = ""
                 st.rerun()
-
-    with tab4:
-        render_novinky_page()            
 
 
 # =========================
