@@ -666,6 +666,7 @@ def build_final_name(system: str, faction: str, product_name: str) -> str:
 
 def build_novinka_from_gw(
     gw_url: str,
+    custom_code: str = "",
     sale_price_czk: Optional[float] = None,
     keep_360: bool = False,
     only_first_image: bool = False,
@@ -704,8 +705,16 @@ def build_novinka_from_gw(
     if only_first_image and images:
         images = [images[0]]
 
-    code = extract_code_from_images(images)
-    external_code = code
+    image_code = extract_code_from_images(images)
+
+    if custom_code:
+        code = custom_code
+        code = custom_code.strip()
+        external_code = image_code
+    else:
+        code = image_code
+        external_code = image_code
+
     ean = ""
 
     xml_feed_name = make_xml_feed_name_from_name(final_name)

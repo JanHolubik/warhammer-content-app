@@ -41,6 +41,11 @@ def render_novinky_page():
         key="novinky_gw_url",
     )
 
+    custom_code = st.text_input(
+    "Vlastní CODE (volitelné)",
+    help="Pokud vyplníš, přepíše automaticky generovaný kód produktu"
+)
+
     sale_price_mode = st.radio(
         "Prodejní cena",
         [
@@ -79,10 +84,12 @@ def render_novinky_page():
             try:
                 result = build_novinka_from_gw(
                     gw_url=gw_url.strip(),
+                    custom_code=custom_code.strip(),
                     sale_price_czk=manual_price if sale_price_mode == "Zadat ručně" else None,
                     keep_360=keep_360,
                     only_first_image=only_first_image,
                 )
+
                 st.session_state["novinky_result"] = result
                 st.success("Novinka byla načtena.")
             except Exception as e:
