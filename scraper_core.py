@@ -255,7 +255,7 @@ def fetch_html(
         timeout=timeout,
         allow_redirects=True,
     )
-
+    r.raise_for_status()
     return (r.text or ""), str(r.url)
 
 
@@ -289,55 +289,41 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/122.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
         "Referer": "https://www.google.com/",
     }
 
     session = requests.Session()
-    resp = session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-
-    log(f"GW status: {resp.status_code}", verbose)
-    log(f"GW final URL: {resp.url}", verbose)
+    resp = session.get(
+        url,
+        headers=headers,
+        timeout=timeout,
+        allow_redirects=True,
+    )
 
     html = resp.text or ""
+    final_url = str(resp.url)
+
+    if verbose:
+        print(f"GW status: {resp.status_code}")
+        print(f"GW final URL: {final_url}")
+        print(f"GW HTML length: {len(html)}")
+        print(f'has hero price: {"data-testid=\\"hero-product-card-price\\"" in html}')
+        print(f'has quantity price: {"data-testid=\\"quantity-and-price-container\\"" in html}')
+        print(f'has image gallery: {"data-testid=\\"image-gallery\\"" in html}')
+        print(f'has gallery button: {"data-testid=\\"gallery-image-button\\"" in html}')
+        print(f'has carousel button: {"data-testid=\\"image-carousel-image-button\\"" in html}')
+        print(f'has product path: {"/app/resources/catalog/product/" in html}')
 
     with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
         f.write(html)
 
-    if verbose:
-        print("GW HTML length:", len(html))
-        print('has image-gallery:', 'data-testid="image-gallery"' in html)
-        print('has container-image-carousel:', 'data-testid="container-image-carousel"' in html)
+    return html, final_url
 
-    return html, str(resp.url)
-
-    for candidate in candidates:
-        for ref in referers:
-            try:
-                html, final_url = fetch_html(
-                    candidate,
-                    timeout=timeout,
-                    referer=ref,
-                    headers=GW_HEADERS,
-                )
-                last_html, last_final = html, final_url
-
-                if looks_like_gw_product_html(html):
-                    return html, final_url
-
-                log(f"GW loaded but markers missing: {candidate} | referer={ref}", verbose)
-            except Exception as e:
-                last_err = e
-                log(f"GW fetch failed for {candidate} | referer={ref}: {e}", verbose)
-
-    if last_html:
-        return last_html, last_final
-
-    if last_err:
-        raise last_err
-
-    return "", url
 
 def norm_ws(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
@@ -1006,6 +992,7 @@ def scrape_gw_images_fallback_regex(
         r'''srcset=["']([^"']*?/catalog/product/[^"']+)["']''',
         r'''src=["']([^"']*?/catalog/product/[^"']+)["']''',
     ]
+    
 
     for pat in patterns:
         matches = re.findall(pat, html, flags=re.I)
@@ -1282,6 +1269,12 @@ def run_scraper(
                     keep_360=bool(keep_360),
                     ensure_query=bool(images_ensure_query),
                 )
+                if verbose:
+                    print("----- IMAGE SCRAPE DEBUG -----")
+                    print("stable images:", len(images))
+                    for u in images[:10]:
+                        print(" stable:", u)
+                    print("------------------------------")
 
                 if not images:
                     log("GW stable image scrape returned 0 images, trying regex fallback...", verbose)
@@ -1293,7 +1286,21 @@ def run_scraper(
                         ensure_query=bool(images_ensure_query),
                     )
 
+                    if verbose:
+                        print("----- REGEX FALLBACK DEBUG -----")
+                        print("regex images:", len(images))
+                        for u in images[:10]:
+                            print(" regex:", u)
+                        print("--------------------------------")    
+
                 images = keep_real_product_images(images)
+
+                if verbose:
+                    print("----- AFTER keep_real_product_images -----")
+                    print("final images:", len(images))
+                    for u in images[:10]:
+                        print(" final:", u)
+                    print("------------------------------------------")
 
             except Exception as e:
                 log(f"GW ERROR: {e}", verbose)
