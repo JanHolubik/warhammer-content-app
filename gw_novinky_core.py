@@ -418,40 +418,54 @@ def scrape_gw_images(gw_url: str, html: str, max_images: int = 20, keep_360: boo
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    selectors = [
-        '[data-testid="image-carousel-image-button"]',
-        '[data-testid="image-carousel-active-image"]',
-        '[data-testid="gallery-image-button"]',
-        '[data-testid="gallery-image"]',
-        '[data-testid="image-gallery"]',
-        '[data-testid="image-carousel-mobile"]',
-    ]
+    # 1) desktop carousel thumbnails
+    for btn in soup.select('[data-testid="image-carousel-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
 
-    for sel in selectors:
-        for node in soup.select(sel):
-            urls.extend(extract_imgs_from_node(node, gw_url))
+    # 2) aktivní velký obrázek
+    for node in soup.select('[data-testid="image-carousel-active-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # fallback – projdi všechny source/img s product path
-    for el in soup.select(
-        'source[srcset*="/app/resources/catalog/product/"], '
-        'source[srcset*="/catalog/product/"], '
-        'img[src*="/app/resources/catalog/product/"], '
-        'img[src*="/catalog/product/"], '
-        'img[data-testid="image-carousel-desktop-image"], '
-        'img[data-testid="image-carousel-mobile-image"]'
-    ):
-        if el.name == "source":
-            best = pick_best_srcset((el.get("srcset") or "").strip())
-            if best:
-                urls.append(abs_url(gw_url, best))
-        else:
-            src = (el.get("src") or "").strip()
-            if src:
-                urls.append(abs_url(gw_url, src))
+    # 3) mobile carousel
+    for node in soup.select('[data-testid="image-carousel-mobile"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
 
-            best = pick_best_srcset((el.get("srcset") or "").strip())
-            if best:
-                urls.append(abs_url(gw_url, best))
+    for node in soup.select('[data-testid="image-carousel-mobile-image"]'):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 4) full gallery jen v hlavní produktové galerii
+    for btn in soup.select('[data-testid="gallery-image-button"]'):
+        urls.extend(extract_imgs_from_node(btn, gw_url))
+
+    for li in soup.select('[data-testid="gallery-image"]'):
+        urls.extend(extract_imgs_from_node(li, gw_url))
+
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
+
+    # 5) fallback pouze uvnitř produktového image containeru / carouselu / galerie
+    scoped_roots = soup.select(
+        '[data-testid="container-image-carousel"], '
+        '[data-testid="image-carousel"], '
+        '[data-testid="image-carousel-mobile"], '
+        '[data-testid="image-gallery"]'
+    )
+
+    for root in scoped_roots:
+        for el in root.select(
+            'source[srcset*="/catalog/product/"], '
+            'source[srcset*="/app/resources/catalog/product/"], '
+            'img[src*="/catalog/product/"], '
+            'img[src*="/app/resources/catalog/product/"]'
+        ):
+            if el.name == "source":
+                best = pick_best_srcset((el.get("srcset") or "").strip())
+                if best:
+                    urls.append(abs_url(gw_url, best))
+            else:
+                src = (el.get("src") or "").strip()
+                if src:
+                    urls.append(abs_url(gw_url, src))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
