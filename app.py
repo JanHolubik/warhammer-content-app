@@ -288,10 +288,11 @@ if st.session_state["selected_engine"] == "warhammer":
                     if not str(product_ean).strip():
                         product_ean = df_preview.iloc[0].get("code", "")
 
+                    product_gw_url = df_preview.iloc[0].get("gw_url", "")
+
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
-                    if str(product_gw_url).strip():
-                        st.write(f"GW URL: {product_gw_url}")
+                    st.write(f"GW URL: {product_gw_url if product_gw_url else '-'}")
 
             except Exception as e:
                 st.warning(f"Nepodařilo se načíst CSV: {e}")
