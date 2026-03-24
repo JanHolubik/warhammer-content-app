@@ -309,15 +309,15 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
     final_url = str(resp.url)
 
     if verbose:
-        print(f"GW status: {resp.status_code}")
-        print(f"GW final URL: {final_url}")
-        print(f"GW HTML length: {len(html)}")
-        print(f'has hero price: {"data-testid=\\"hero-product-card-price\\"" in html}')
-        print(f'has quantity price: {"data-testid=\\"quantity-and-price-container\\"" in html}')
-        print(f'has image gallery: {"data-testid=\\"image-gallery\\"" in html}')
-        print(f'has gallery button: {"data-testid=\\"gallery-image-button\\"" in html}')
-        print(f'has carousel button: {"data-testid=\\"image-carousel-image-button\\"" in html}')
-        print(f'has product path: {"/app/resources/catalog/product/" in html}')
+    print(f"GW status: {resp.status_code}")
+    print(f"GW final URL: {final_url}")
+    print(f"GW HTML length: {len(html)}")
+    print('has hero price:', 'data-testid="hero-product-card-price"' in html)
+    print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
+    print('has image gallery:', 'data-testid="image-gallery"' in html)
+    print('has gallery button:', 'data-testid="gallery-image-button"' in html)
+    print('has carousel button:', 'data-testid="image-carousel-image-button"' in html)
+    print('has product path:', '/app/resources/catalog/product/' in html)
 
     with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
         f.write(html)
