@@ -238,6 +238,27 @@ def fetch_html(
     r.raise_for_status()
     return (r.text or ""), str(r.url)
 
+def looks_like_gw_product_html(html: str) -> bool:
+    if not html:
+        return False
+
+    markers = [
+        'data-testid="hero-product-card-price"',
+        'data-testid="quantity-and-price-container"',
+        'data-testid="gallery-modal-image"',
+        'data-testid="button-gallery-view-full"',
+        'data-testid="image-carousel-image-button"',
+        'data-testid="gallery-image-button"',
+        'data-testid="image-gallery"',
+        'data-testid="container-image-carousel"',
+        "/app/resources/catalog/product/",
+        "Missing_Image_Servo_Skull",
+    ]
+
+    low = html.lower()
+    return any(marker.lower() in low for marker in markers)
+
+
 def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
     candidates: List[str] = []
 
