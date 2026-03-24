@@ -283,31 +283,25 @@ def looks_like_gw_product_html(html: str) -> bool:
 
 
 def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[str, str]:
-    candidates: List[str] = []
-    if url:
-        candidates.append(url)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Referer": "https://www.google.com/",
+    }
 
-        stripped = strip_query_and_fragment(url)
-        if stripped != url:
-            candidates.append(stripped)
+    session = requests.Session()
+    resp = session.get(url, headers=headers, timeout=timeout)
 
-        deduped = []
-        seen = set()
-        for u in candidates:
-            if u not in seen:
-                deduped.append(u)
-                seen.add(u)
-        candidates = deduped
+    log(f"GW status: {resp.status_code}", verbose)
 
-    last_html = ""
-    last_final = url
-    last_err: Optional[Exception] = None
+    html = resp.text
 
-    referers = [
-        "https://www.warhammer.com/",
-        "https://www.warhammer.com/en-US/home",
-        "",
-    ]
+    # 🔥 DEBUG – uloží HTML do souboru
+    with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
+        f.write(html)
+
+    return html, resp.url
 
     for candidate in candidates:
         for ref in referers:
