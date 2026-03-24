@@ -255,7 +255,7 @@ def fetch_html(
         timeout=timeout,
         allow_redirects=True,
     )
-    r.raise_for_status()
+
     return (r.text or ""), str(r.url)
 
 
@@ -284,24 +284,33 @@ def looks_like_gw_product_html(html: str) -> bool:
 
 def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[str, str]:
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Referer": "https://www.google.com/",
     }
 
     session = requests.Session()
-    resp = session.get(url, headers=headers, timeout=timeout)
+    resp = session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
 
     log(f"GW status: {resp.status_code}", verbose)
+    log(f"GW final URL: {resp.url}", verbose)
 
-    html = resp.text
+    html = resp.text or ""
 
-    # 🔥 DEBUG – uloží HTML do souboru
     with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
         f.write(html)
 
-    return html, resp.url
+    if verbose:
+        print("GW HTML length:", len(html))
+        print('has image-gallery:', 'data-testid="image-gallery"' in html)
+        print('has container-image-carousel:', 'data-testid="container-image-carousel"' in html)
+
+    return html, str(resp.url)
 
     for candidate in candidates:
         for ref in referers:
@@ -974,6 +983,54 @@ def scrape_gw_images_stable(
 
     return urls
 
+def scrape_gw_images_fallback_regex(
+    gw_url: str,
+    html: str,
+    max_images: int = 20,
+    keep_360: bool = False,
+    ensure_query: bool = False,
+    ensure_query_default: str = "fm=webp&w=1200&h=1237",
+) -> List[str]:
+    urls: List[str] = []
+
+    if not html:
+        return urls
+
+    patterns = [
+        r'''srcset=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/resources/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/resources/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/media/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/media/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/catalog/product/[^"']+)["']''',
+    ]
+
+    for pat in patterns:
+        matches = re.findall(pat, html, flags=re.I)
+        for match in matches:
+            candidate = match.strip()
+
+            if "," in candidate:
+                parts = [x.strip() for x in candidate.split(",") if x.strip()]
+                for part in parts:
+                    url_part = part.split(" ")[0].strip()
+                    if url_part:
+                        urls.append(abs_url(gw_url, url_part))
+            else:
+                urls.append(abs_url(gw_url, candidate))
+
+    urls = filter_gw_product_images(urls, keep_360=keep_360)
+    urls = uniq_keep_order(urls)
+    urls = dedupe_by_filename(urls)
+    urls = keep_real_product_images(urls)
+
+    if ensure_query:
+        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
+
+    return urls[:max_images]
+
 def keep_real_product_images(images: List[str]) -> List[str]:
     out: List[str] = []
 
@@ -1227,8 +1284,8 @@ def run_scraper(
                 )
 
                 if not images:
-                    log("GW stable image scrape returned 0 images, trying fallback...", verbose)
-                    images = scrape_gw_images_fallback_simple(
+                    log("GW stable image scrape returned 0 images, trying regex fallback...", verbose)
+                    images = scrape_gw_images_fallback_regex(
                         gw_final,
                         gw_html,
                         max_images=max_images,
