@@ -426,6 +426,36 @@ def fmt_cz_money(v: Optional[float], decimals: int = 2) -> str:
         return "-"
     return f"{v:.{decimals}f}".replace(".", ",")
 
+def is_valid_product_code(value: str) -> bool:
+    v = norm_ws(value)
+
+    if not v:
+        return False
+
+    # moc krátké nesmysly typu "ze"
+    if len(v) < 5:
+        return False
+
+    # čistě písmena bez čísel/hyfenů bývají často špatně
+    if re.fullmatch(r"[a-zA-Z]+", v):
+        return False
+
+    return True
+
+
+def generate_fallback_code_from_url(hp_url: str, gw_url: str = "") -> str:
+    source_url = gw_url or hp_url
+    path = urlparse(source_url).path.strip("/")
+
+    slug = path.split("/")[-1] if path else "produkt"
+    slug = re.sub(r"[^a-zA-Z0-9\-]", "-", slug)
+    slug = re.sub(r"-+", "-", slug).strip("-").lower()
+
+    if not slug:
+        slug = "produkt"
+
+    return f"wh-{slug}"
+
 
 # =========================
 # TYPE DETECTION
@@ -570,9 +600,15 @@ def hp_extract_external_code(soup: BeautifulSoup) -> str:
     if m:
         return m.group(1)
 
-    m2 = re.search(r"(Kód|Code|Produktové číslo|Číslo produktu|SKU)[^\w]*(\w[\w\-\/]+)", txt, flags=re.IGNORECASE)
+    m2 = re.search(
+        r"(Kód|Code|Produktové číslo|Číslo produktu|SKU)[^A-Za-z0-9]{0,10}([A-Za-z0-9][A-Za-z0-9\-\/]{4,})",
+        txt,
+        flags=re.IGNORECASE
+    )
     if m2:
-        return m2.group(2)
+        candidate = m2.group(2).strip()
+        if is_valid_product_code(candidate):
+            return candidate
 
     for script in soup.select("script[type='application/ld+json']"):
         txt_json = script.get_text(" ", strip=True)
@@ -1198,16 +1234,20 @@ def run_scraper(
 
         fallback_code = extract_code_from_images(images)
 
+        if not is_valid_product_code(external):
+            external = ""
+
         if not external and fallback_code:
             external = fallback_code
 
-        code = ""
         if ean:
             code = ean
-        elif external:
+        elif is_valid_product_code(external):
             code = external
         elif fallback_code:
             code = fallback_code
+        else:
+            code = generate_fallback_code_from_url(hp_url, gw_final if gw_url else "")
 
         name_final = build_name_from_h1(h1, _system, faction)
 
