@@ -928,23 +928,45 @@ def scrape_gw_images_stable(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    selectors = [
-        '[data-testid="image-carousel-image-button"]',
-        '[data-testid="image-carousel-active-image"]',
-        '[data-testid="gallery-image-button"]',
-        '[data-testid="gallery-image"]',
-        '[data-testid="image-gallery"]',
-        '[data-testid="image-carousel-mobile"]',
-        '[data-testid="image-carousel-mobile-image"]',
-    ]
+    # 1) Nejdřív zkus přímo full gallery
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
 
-    for sel in selectors:
-        for node in soup.select(sel):
-            urls.extend(extract_imgs_from_node(node, gw_url))
+    # 2) Pak jednotlivé gallery itemy
+    for node in soup.select(
+        '[data-testid="gallery-image"], '
+        '[data-testid="gallery-image-button"]'
+    ):
+        urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # fallback: vezmi všechny img/source z dokumentu
+    # 3) Pak carousel jako fallback
+    for node in soup.select(
+        '[data-testid="container-image-carousel"], '
+        '[data-testid="image-carousel"], '
+        '[data-testid="image-carousel-image-button"], '
+        '[data-testid="image-carousel-active-image"], '
+        '[data-testid="image-carousel-mobile"], '
+        '[data-testid="image-carousel-mobile-image"]'
+    ):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 4) Poslední nouzový fallback — všechny img/source z dokumentu,
+    # které vypadají jako produktové obrázky
     if not urls:
-        urls.extend(extract_imgs_from_node(soup, gw_url))
+        for el in soup.select(
+            'source[srcset*="/catalog/product/"], '
+            'source[srcset*="/app/resources/catalog/product/"], '
+            'img[src*="/catalog/product/"], '
+            'img[src*="/app/resources/catalog/product/"]'
+        ):
+            if el.name == "source":
+                best = pick_best_srcset((el.get("srcset") or "").strip())
+                if best:
+                    urls.append(abs_url(gw_url, best))
+            else:
+                src = (el.get("src") or "").strip()
+                if src:
+                    urls.append(abs_url(gw_url, src))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
