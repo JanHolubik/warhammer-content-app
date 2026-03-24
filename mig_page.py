@@ -133,6 +133,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
         row_index = None
         product_name = ""
         product_ean = ""
+        product_code = ""
 
         if uploaded_csv is not None:
             try:
@@ -155,9 +156,11 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     row_index = int(selected.split("|")[0].strip())
                     product_name = df.iloc[row_index].get(name_col, "")
                     product_ean = df.iloc[row_index].get("ean", "")
+                    product_code = df.iloc[row_index].get("code", "")
 
                     st.info(f"Produkt: {product_name}")
                     st.write(f"EAN: {product_ean}")
+                    st.write(f"CODE: {product_code}")
                 else:
                     st.error(
                         f"CSV neobsahuje sloupec 'name' ani 'name:cs'. "
@@ -175,6 +178,7 @@ def render_mig_section(product_type_label: str, prompt_type: str, item_type: str
                     prompt_type=prompt_type,
                     product_name=product_name,
                     product_ean=product_ean,
+                    product_code=product_code,
                 )
                 st.session_state["mig_generated_prompt_type"] = prompt_type
 

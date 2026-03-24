@@ -52,7 +52,12 @@ def create_mig_card_row(
     return pd.DataFrame([row])
 
 
-def build_mig_prompt(prompt_type: str, product_name: str, product_ean: str) -> str:
+def build_mig_prompt(
+    prompt_type: str,
+    product_name: str,
+    product_ean: str,
+    product_code: str = "",
+) -> str:
     template_path = PROMPT_TEMPLATE_DIR / f"{prompt_type}.txt"
     if not template_path.exists():
         raise FileNotFoundError(f"Šablona nenalezena: {template_path}")
@@ -67,6 +72,9 @@ PRODUKT
 
 EAN
 {product_ean}
+
+CODE
+{product_code}
 --------------------------------------------------
 """
 
