@@ -221,7 +221,7 @@ def fetch_html(
     timeout: int = 30,
     referer: str = "",
     headers: Optional[Dict[str, str]] = None
-) -> Tuple[str, str]:
+) -> Tuple[str, str, int]:
     hdrs = dict(headers or GW_HEADERS)
 
     if referer:
@@ -235,8 +235,8 @@ def fetch_html(
         timeout=timeout,
         allow_redirects=True,
     )
-    r.raise_for_status()
-    return (r.text or ""), str(r.url)
+
+    return (r.text or ""), str(r.url), r.status_code
 
 def looks_like_gw_product_html(html: str) -> bool:
     if not html:
@@ -290,12 +290,16 @@ def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
     for candidate in candidates:
         for ref in referers:
             try:
-                html, final_url = fetch_html(
+                html, final_url, status_code = fetch_html(
                     candidate,
                     timeout=timeout,
                     referer=ref,
                     headers=GW_HEADERS,
                 )
+
+                if status_code >= 400:
+                    last_err = Exception(f"HTTP {status_code} for {final_url}")
+                    continue
 
                 last_html = html
                 last_final = final_url
