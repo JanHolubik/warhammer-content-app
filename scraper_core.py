@@ -917,36 +917,32 @@ def scrape_gw_images_stable(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) Nejdřív zkus přímo full gallery
-    for gallery in soup.select('[data-testid="image-gallery"]'):
-        urls.extend(extract_imgs_from_node(gallery, gw_url))
-
-    # 2) Pak jednotlivé gallery itemy
-    for node in soup.select(
-        '[data-testid="gallery-image"], '
-        '[data-testid="gallery-image-button"]'
-    ):
-        urls.extend(extract_imgs_from_node(node, gw_url))
-
-    # 3) Pak carousel jako fallback
+    # 1) BOOK / SINGLE IMAGE CAROUSEL – priorita
     for node in soup.select(
         '[data-testid="container-image-carousel"], '
-        '[data-testid="image-carousel"], '
-        '[data-testid="image-carousel-image-button"], '
         '[data-testid="image-carousel-active-image"], '
         '[data-testid="image-carousel-mobile"], '
         '[data-testid="image-carousel-mobile-image"]'
     ):
         urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 4) Poslední nouzový fallback — všechny img/source z dokumentu,
-    # které vypadají jako produktové obrázky
+    # 2) klasická gallery
+    for gallery in soup.select('[data-testid="image-gallery"]'):
+        urls.extend(extract_imgs_from_node(gallery, gw_url))
+
+    for node in soup.select(
+        '[data-testid="gallery-image"], '
+        '[data-testid="gallery-image-button"]'
+    ):
+        urls.extend(extract_imgs_from_node(node, gw_url))
+
+    # 3) nouzový fallback přes všechny source/img s catalog/product
     if not urls:
         for el in soup.select(
-            'source[srcset*="/catalog/product/"], '
             'source[srcset*="/app/resources/catalog/product/"], '
-            'img[src*="/catalog/product/"], '
-            'img[src*="/app/resources/catalog/product/"]'
+            'img[src*="/app/resources/catalog/product/"], '
+            'source[srcset*="/catalog/product/"], '
+            'img[src*="/catalog/product/"]'
         ):
             if el.name == "source":
                 best = pick_best_srcset((el.get("srcset") or "").strip())
@@ -962,12 +958,10 @@ def scrape_gw_images_stable(
     urls = dedupe_by_filename(urls)
     urls = keep_real_product_images(urls)
 
-    urls = urls[:max_images]
-
     if ensure_query:
         urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
 
-    return urls
+    return urls[:max_images]
 
 def scrape_gw_images_fallback_regex(
     gw_url: str,
