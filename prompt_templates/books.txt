@@ -166,11 +166,17 @@ hlavni_vyhoda_2:
 hlavni_vyhoda_3:
 cilova_skupina:
 
-DETAILNÍ ŠABLONA
 typ_knihy:
 edice:
 jazyk:
 pro_koho:
+název_sady:
+hlavni_prodejni_point_1:
+hlavni_prodejni_point_2:
+hlavni_prodejni_point_3:
+doporučení_pro_koho:
+frakce:
+potřebné_vybavení:
 nazev_produktu:
 intro_text:
 intro_image_src:
@@ -220,7 +226,6 @@ faq_otazka4:
 faq_odpoved4:
 sekce_video_nadpis:
 video_url:
-
 TECHNICKÁ PRAVIDLA PRO URL A OBRÁZKY
 intro_image_src:
 Pokud není známé konkrétní URL, vrať přesně:

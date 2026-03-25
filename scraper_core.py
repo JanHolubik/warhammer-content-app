@@ -331,7 +331,7 @@ def norm_ws(s: str) -> str:
 
 def clean_title(title: str) -> str:
     title = norm_ws(title)
-    title = re.sub(r"^Knihy\s*-\s*", "", title, flags=re.IGNORECASE)
+    title = re.sub(r"^Knihy\s*[:\-]\s*", "", title, flags=re.IGNORECASE)
     return title
 
 
