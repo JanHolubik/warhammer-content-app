@@ -554,10 +554,12 @@ def hp_pick_system(soup: BeautifulSoup) -> str:
             return normalize_system_name(c)
 
     for c in crumbs:
-        if c.lower() != "warhammer":
-            return normalize_system_name(c)
+        cl = c.lower()
+        if cl in ("warhammer", "knihy", "books", "black library"):
+            continue
+        return normalize_system_name(c)
 
-    return normalize_system_name("Warhammer")
+    return "Warhammer"
 
 
 def hp_extract_ean(soup: BeautifulSoup) -> str:
@@ -917,7 +919,7 @@ def scrape_gw_images_stable(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) BOOK / SINGLE IMAGE CAROUSEL – priorita
+    # 1) carousel / single image
     for node in soup.select(
         '[data-testid="container-image-carousel"], '
         '[data-testid="image-carousel-active-image"], '
@@ -926,37 +928,29 @@ def scrape_gw_images_stable(
     ):
         urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 2) klasická gallery
-    for gallery in soup.select('[data-testid="image-gallery"]'):
-        urls.extend(extract_imgs_from_node(gallery, gw_url))
-
+    # 2) klasická galerie
     for node in soup.select(
+        '[data-testid="image-gallery"], '
         '[data-testid="gallery-image"], '
         '[data-testid="gallery-image-button"]'
     ):
         urls.extend(extract_imgs_from_node(node, gw_url))
 
-    # 3) nouzový fallback přes všechny source/img s catalog/product
+    # 3) tvrdý fallback – všechny source/img s catalog/product
     if not urls:
-        for el in soup.select(
-            'source[srcset*="/app/resources/catalog/product/"], '
-            'img[src*="/app/resources/catalog/product/"], '
-            'source[srcset*="/catalog/product/"], '
-            'img[src*="/catalog/product/"]'
-        ):
+        for el in soup.select("source, img"):
+            src = ""
             if el.name == "source":
-                best = pick_best_srcset((el.get("srcset") or "").strip())
-                if best:
-                    urls.append(abs_url(gw_url, best))
+                src = pick_best_srcset((el.get("srcset") or "").strip()) or ""
             else:
                 src = (el.get("src") or "").strip()
-                if src:
-                    urls.append(abs_url(gw_url, src))
+
+            if "/catalog/product/" in src or "/app/resources/catalog/product/" in src:
+                urls.append(abs_url(gw_url, src))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
     urls = dedupe_by_filename(urls)
-    urls = keep_real_product_images(urls)
 
     if ensure_query:
         urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
