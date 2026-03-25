@@ -221,7 +221,7 @@ def fetch_html(
     timeout: int = 30,
     referer: str = "",
     headers: Optional[Dict[str, str]] = None
-) -> Tuple[str, str, int]:
+) -> Tuple[str, str]:
     hdrs = dict(headers or GW_HEADERS)
 
     if referer:
@@ -235,31 +235,11 @@ def fetch_html(
         timeout=timeout,
         allow_redirects=True,
     )
-
-    return (r.text or ""), str(r.url), r.status_code
-
-def looks_like_gw_product_html(html: str) -> bool:
-    if not html:
-        return False
-
-    markers = [
-        'data-testid="hero-product-card-price"',
-        'data-testid="quantity-and-price-container"',
-        'data-testid="gallery-modal-image"',
-        'data-testid="button-gallery-view-full"',
-        'data-testid="image-carousel-image-button"',
-        'data-testid="gallery-image-button"',
-        'data-testid="image-gallery"',
-        'data-testid="container-image-carousel"',
-        "/app/resources/catalog/product/",
-        "Missing_Image_Servo_Skull",
-    ]
-
-    low = html.lower()
-    return any(marker.lower() in low for marker in markers)
+    r.raise_for_status()
+    return (r.text or ""), str(r.url)
 
 
-def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
+def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[str, str]:
     candidates: List[str] = []
 
     if url:
@@ -280,6 +260,7 @@ def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
     referers = [
         "https://www.warhammer.com/",
         "https://www.warhammer.com/en-US/home",
+        "https://www.google.com/",
         "",
     ]
 
@@ -290,16 +271,12 @@ def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
     for candidate in candidates:
         for ref in referers:
             try:
-                html, final_url, status_code = fetch_html(
+                html, final_url = fetch_html(
                     candidate,
                     timeout=timeout,
                     referer=ref,
                     headers=GW_HEADERS,
                 )
-
-                if status_code >= 400:
-                    last_err = Exception(f"HTTP {status_code} for {final_url}")
-                    continue
 
                 last_html = html
                 last_final = final_url
@@ -307,8 +284,13 @@ def fetch_gw_html(url: str, timeout: int = 30) -> Tuple[str, str]:
                 if looks_like_gw_product_html(html):
                     return html, final_url
 
+                if verbose:
+                    print(f"GW loaded but markers missing: {candidate} | referer={ref}")
+
             except Exception as e:
                 last_err = e
+                if verbose:
+                    print(f"GW fetch failed for {candidate} | referer={ref}: {e}")
 
     if last_html:
         return last_html, last_final
@@ -688,7 +670,7 @@ def build_novinka_from_gw(
     zbozi_category_id: str = "412",
     google_category_id: str = "1246",
 ) -> Dict[str, object]:
-    html, final_url = fetch_gw_html(gw_url)
+    html, final_url = fetch_gw_html(gw_url, verbose=False)
     soup = BeautifulSoup(html, "lxml")
 
     raw_name = gw_extract_name(soup, final_url)
