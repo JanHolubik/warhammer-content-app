@@ -216,6 +216,25 @@ def strip_query_and_fragment(url: str) -> str:
     p = urlparse(url)
     return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
 
+def looks_like_gw_product_html(html: str) -> bool:
+    if not html:
+        return False
+
+    markers = [
+        'data-testid="hero-product-card-price"',
+        'data-testid="quantity-and-price-container"',
+        'data-testid="gallery-modal-image"',
+        'data-testid="button-gallery-view-full"',
+        'data-testid="image-carousel-image-button"',
+        'data-testid="gallery-image-button"',
+        'data-testid="image-gallery"',
+        "/app/resources/catalog/product/",
+        "Missing_Image_Servo_Skull",
+    ]
+
+    low = html.lower()
+    return any(m.lower() in low for m in markers)
+
 def fetch_html(
     url: str,
     timeout: int = 30,
