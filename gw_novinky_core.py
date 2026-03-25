@@ -235,7 +235,9 @@ def fetch_html(
         timeout=timeout,
         allow_redirects=True,
     )
-    r.raise_for_status()
+    if r.status_code >= 400:
+        return "", str(r.url)
+
     return (r.text or ""), str(r.url)
 
 
