@@ -283,46 +283,59 @@ def looks_like_gw_product_html(html: str) -> bool:
 
 
 def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[str, str]:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/122.0.0.0 Safari/537.36"
-        ),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Upgrade-Insecure-Requests": "1",
-        "Referer": "https://www.google.com/",
-    }
+    candidates: List[str] = []
+    if url:
+        candidates.append(url)
 
-    session = requests.Session()
-    resp = session.get(
-        url,
-        headers=headers,
-        timeout=timeout,
-        allow_redirects=True,
-    )
+        stripped = strip_query_and_fragment(url)
+        if stripped != url:
+            candidates.append(stripped)
 
-    html = resp.text or ""
-    final_url = str(resp.url)
+    seen = set()
+    candidates = [u for u in candidates if not (u in seen or seen.add(u))]
 
-    if verbose:
-        print(f"GW status: {resp.status_code}")
-        print(f"GW final URL: {final_url}")
-        print(f"GW HTML length: {len(html)}")
-        print('has hero price:', 'data-testid="hero-product-card-price"' in html)
-        print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
-        print('has image gallery:', 'data-testid="image-gallery"' in html)
-        print('has gallery button:', 'data-testid="gallery-image-button"' in html)
-        print('has carousel button:', 'data-testid="image-carousel-image-button"' in html)
-        print('has product path:', '/app/resources/catalog/product/' in html)
+    last_html = ""
+    last_final = url
+    last_err: Optional[Exception] = None
 
-    with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
-        f.write(html)
+    for candidate in candidates:
+        try:
+            html, final_url = fetch_html(
+                candidate,
+                timeout=timeout,
+                referer="https://www.warhammer.com/",
+                headers=GW_HEADERS,
+            )
+            last_html, last_final = html, final_url
 
-    return html, final_url
+            if verbose:
+                print(f"GW candidate OK: {candidate}")
+                print(f"GW final URL: {final_url}")
+                print(f"GW HTML length: {len(html)}")
+                print('has hero price:', 'data-testid="hero-product-card-price"' in html)
+                print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
+                print('has product path:', '/app/resources/catalog/product/' in html)
+
+            if looks_like_gw_product_html(html):
+                with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
+                    f.write(html)
+                return html, final_url
+
+            log(f"GW loaded but markers missing: {candidate}", verbose)
+
+        except Exception as e:
+            last_err = e
+            log(f"GW fetch failed for {candidate}: {e}", verbose)
+
+    if last_html:
+        with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
+            f.write(last_html)
+        return last_html, last_final
+
+    if last_err:
+        raise last_err
+
+    return "", url
 
 
 def norm_ws(s: str) -> str:
@@ -548,16 +561,27 @@ def hp_pick_system(soup: BeautifulSoup) -> str:
     crumbs = hp_extract_breadcrumbs_list(soup)
 
     for c in crumbs:
-        if c in ("Warhammer 40,000", "The Horus Heresy"):
-            return normalize_system_name(c)
-        if c.startswith("Warhammer Age of Sigmar"):
-            return normalize_system_name(c)
+        c_norm = norm_ws(c)
 
-    for c in crumbs:
-        cl = c.lower()
-        if cl in ("warhammer", "knihy", "books", "black library"):
-            continue
-        return normalize_system_name(c)
+        if c_norm in ("Warhammer 40,000", "Warhammer 40k"):
+            return "Warhammer 40k"
+        if c_norm == "The Horus Heresy":
+            return "The Horus Heresy"
+        if c_norm.startswith("Warhammer Age of Sigmar"):
+            return "Warhammer Age of Sigmar"
+        if c_norm == "Warhammer: The Old World":
+            return "Warhammer: The Old World"
+
+    full_text = soup.get_text(" ", strip=True).lower()
+
+    if "horus heresy" in full_text:
+        return "The Horus Heresy"
+    if "warhammer 40,000" in full_text or "warhammer 40k" in full_text:
+        return "Warhammer 40k"
+    if "age of sigmar" in full_text:
+        return "Warhammer Age of Sigmar"
+    if "the old world" in full_text:
+        return "Warhammer: The Old World"
 
     return "Warhammer"
 
@@ -693,44 +717,31 @@ def detect_faction_from_gw_html(gw_html: str, system: str = "") -> str:
 # =========================
 # GW PRICE
 # =========================
+
 def gw_extract_price(gw_html: str) -> Tuple[Optional[float], Optional[str]]:
     if not gw_html:
         return None, None
 
-    try:
-        soup = BeautifulSoup(gw_html, "lxml")
+    soup = BeautifulSoup(gw_html, "lxml")
 
-        hero = soup.select_one('[data-testid="hero-product-card-price"]')
-        if hero:
-            txt = hero.get_text(" ", strip=True)
-            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
-            if m:
-                return float(m.group(2).replace(",", ".")), m.group(1)
-
-        qty = soup.select_one('[data-testid="quantity-and-price-container"]')
-        if qty:
-            txt = qty.get_text(" ", strip=True)
-            m = re.search(r"([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)", txt)
-            if m:
-                return float(m.group(2).replace(",", ".")), m.group(1)
-    except Exception:
-        pass
-
-    patterns = [
-        r'data-testid="hero-product-card-price".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'data-testid="quantity-and-price-container".{0,600}?([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+    selectors = [
+        '[data-testid="hero-product-card-price"]',
+        '[data-testid="quantity-and-price-container"]',
     ]
-    for pat in patterns:
-        m = re.search(pat, gw_html, flags=re.I | re.S)
-        if m:
-            try:
+
+    for sel in selectors:
+        el = soup.select_one(sel)
+        if el:
+            txt = el.get_text(" ", strip=True)
+            m = re.search(r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)', txt)
+            if m:
                 return float(m.group(2).replace(",", ".")), m.group(1)
-            except Exception:
-                pass
+
+    m = re.search(r'([€$£])\s*([0-9]+(?:[.,][0-9]{1,2})?)', gw_html, flags=re.I | re.S)
+    if m:
+        return float(m.group(2).replace(",", ".")), m.group(1)
 
     return None, None
-
 
 # =========================
 # GW IMAGE SCRAPE
@@ -1239,7 +1250,7 @@ def run_scraper(
                 gw_price, gw_currency = gw_extract_price(gw_html)
                 faction = detect_faction_from_gw_html(gw_html, _system)
 
-                images = scrape_gw_images_stable(
+                scrape_gw_images_robust(
                     gw_final,
                     gw_html,
                     max_images=max_images,
