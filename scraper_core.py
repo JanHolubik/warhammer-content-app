@@ -812,45 +812,24 @@ def is_missing_image(u: str) -> bool:
 
 
 def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
-    out: List[str] = []
+    out = []
 
     for u in urls:
-        if not u or is_missing_image(u):
+        if not u:
             continue
 
-        try:
-            p = urlparse(u)
-            path = (p.path or "").lower()
-            netloc = (p.netloc or "").lower()
-        except Exception:
-            path = str(u).lower()
-            netloc = ""
+        low = u.lower()
 
-        # POZOR:
-        # nepoužívat jen "360" in path
-        # protože GW má 360 i uvnitř názvů souborů (např. AoSWarcry18360)
-        is_real_360_path = (
-            "/threesixty/" in path
-            or "/threeSixty/" in (p.path or "")
-        )
-
-        if (not keep_360) and is_real_360_path:
+        if "missing_image" in low or "missing_image_servo_skull" in low:
             continue
 
-        allowed = (
-            "warhammer.com" in netloc
-            or "games-workshop.com" in netloc
-            or "gwplc" in netloc
-            or "/app/resources/catalog/product/" in path
-            or "/catalog/product/" in path
-            or "/media/catalog/product/" in path
-            or "/resources/catalog/product/" in path
-        )
+        if "/app/resources/catalog/product/" not in low and "/catalog/product/" not in low:
+            continue
 
-        looks_like_image = any(ext in path for ext in [".jpg", ".jpeg", ".png", ".webp", ".avif"])
+        if not keep_360 and "/threesixty/" in low:
+            continue
 
-        if allowed or looks_like_image:
-            out.append(u)
+        out.append(u)
 
     return out
 
@@ -908,7 +887,7 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
     except Exception:
         return url
     
-def scrape_gw_images_stable(
+def scrape_gw_images_robust(
     gw_url: str,
     html: str,
     max_images: int = 20,
@@ -919,34 +898,44 @@ def scrape_gw_images_stable(
     soup = BeautifulSoup(html, "lxml")
     urls: List[str] = []
 
-    # 1) carousel / single image
-    for node in soup.select(
-        '[data-testid="container-image-carousel"], '
-        '[data-testid="image-carousel-active-image"], '
-        '[data-testid="image-carousel-mobile"], '
-        '[data-testid="image-carousel-mobile-image"]'
-    ):
-        urls.extend(extract_imgs_from_node(node, gw_url))
+    # A) celý dokument - img/src
+    for img in soup.select("img[src]"):
+        src = (img.get("src") or "").strip()
+        if src:
+            urls.append(abs_url(gw_url, src))
 
-    # 2) klasická galerie
-    for node in soup.select(
-        '[data-testid="image-gallery"], '
-        '[data-testid="gallery-image"], '
-        '[data-testid="gallery-image-button"]'
-    ):
-        urls.extend(extract_imgs_from_node(node, gw_url))
+    # B) celý dokument - img/srcset
+    for img in soup.select("img[srcset]"):
+        best = pick_best_srcset((img.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(gw_url, best))
 
-    # 3) tvrdý fallback – všechny source/img s catalog/product
-    if not urls:
-        for el in soup.select("source, img"):
-            src = ""
-            if el.name == "source":
-                src = pick_best_srcset((el.get("srcset") or "").strip()) or ""
+    # C) celý dokument - source/srcset
+    for source in soup.select("source[srcset]"):
+        best = pick_best_srcset((source.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(gw_url, best))
+
+    # D) regex fallback přes raw HTML
+    patterns = [
+        r'''src=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/catalog/product/[^"']+)["']''',
+    ]
+
+    for pat in patterns:
+        matches = re.findall(pat, html, flags=re.I)
+        for match in matches:
+            candidate = match.strip()
+
+            if "," in candidate:
+                for part in candidate.split(","):
+                    url_part = part.strip().split(" ")[0].strip()
+                    if url_part:
+                        urls.append(abs_url(gw_url, url_part))
             else:
-                src = (el.get("src") or "").strip()
-
-            if "/catalog/product/" in src or "/app/resources/catalog/product/" in src:
-                urls.append(abs_url(gw_url, src))
+                urls.append(abs_url(gw_url, candidate))
 
     urls = filter_gw_product_images(urls, keep_360=keep_360)
     urls = uniq_keep_order(urls)
