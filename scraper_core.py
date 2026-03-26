@@ -291,8 +291,13 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
         if stripped != url:
             candidates.append(stripped)
 
-    seen = set()
-    candidates = [u for u in candidates if not (u in seen or seen.add(u))]
+        deduped = []
+        seen = set()
+        for u in candidates:
+            if u not in seen:
+                deduped.append(u)
+                seen.add(u)
+        candidates = deduped
 
     last_html = ""
     last_final = url
@@ -308,20 +313,21 @@ def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[s
             )
             last_html, last_final = html, final_url
 
-            if verbose:
-                print(f"GW candidate OK: {candidate}")
-                print(f"GW final URL: {final_url}")
-                print(f"GW HTML length: {len(html)}")
-                print('has hero price:', 'data-testid="hero-product-card-price"' in html)
-                print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
-                print('has product path:', '/app/resources/catalog/product/' in html)
-
             if looks_like_gw_product_html(html):
+                if verbose:
+                    print(f"GW candidate OK: {candidate}")
+                    print(f"GW final URL: {final_url}")
+                    print(f"GW HTML length: {len(html)}")
+                    print('has hero price:', 'data-testid="hero-product-card-price"' in html)
+                    print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
+                    print('has product path:', '/app/resources/catalog/product/' in html)
+
                 with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
                     f.write(html)
+
                 return html, final_url
 
-            log(f"GW loaded but markers missing: {candidate}", verbose)
+            log(f"GW fallback candidate loaded but markers missing: {candidate}", verbose)
 
         except Exception as e:
             last_err = e
@@ -561,19 +567,20 @@ def hp_pick_system(soup: BeautifulSoup) -> str:
     crumbs = hp_extract_breadcrumbs_list(soup)
 
     for c in crumbs:
-        c_norm = norm_ws(c)
+        if c in ("Warhammer 40,000", "The Horus Heresy"):
+            return normalize_system_name(c)
+        if c.startswith("Warhammer Age of Sigmar"):
+            return normalize_system_name(c)
+        if c == "Warhammer: The Old World":
+            return normalize_system_name(c)
 
-        if c_norm in ("Warhammer 40,000", "Warhammer 40k"):
-            return "Warhammer 40k"
-        if c_norm == "The Horus Heresy":
-            return "The Horus Heresy"
-        if c_norm.startswith("Warhammer Age of Sigmar"):
-            return "Warhammer Age of Sigmar"
-        if c_norm == "Warhammer: The Old World":
-            return "Warhammer: The Old World"
+    for c in crumbs:
+        low = c.lower()
+        if low in ("warhammer", "knihy", "books", "black library"):
+            continue
+        return normalize_system_name(c)
 
     full_text = soup.get_text(" ", strip=True).lower()
-
     if "horus heresy" in full_text:
         return "The Horus Heresy"
     if "warhammer 40,000" in full_text or "warhammer 40k" in full_text:
@@ -777,71 +784,40 @@ def pick_best_srcset(srcset: str) -> Optional[str]:
 
 def extract_imgs_from_node(node: BeautifulSoup, base_url: str) -> List[str]:
     urls: List[str] = []
-
-    if node is None:
-        return urls
-
-    node_name = getattr(node, "name", None)
-
-    # Když je přímo <img>
-    if node_name == "img":
-        src = (node.get("src") or "").strip()
-        if src:
-            urls.append(abs_url(base_url, src))
-
-        best = pick_best_srcset((node.get("srcset") or "").strip())
-        if best:
-            urls.append(abs_url(base_url, best))
-
-    # Když je přímo <source>
-    if node_name == "source":
-        best = pick_best_srcset((node.get("srcset") or "").strip())
-        if best:
-            urls.append(abs_url(base_url, best))
-
-    # všechny vnořené img
     for img in node.select("img"):
         src = (img.get("src") or "").strip()
         if src:
             urls.append(abs_url(base_url, src))
-
         best = pick_best_srcset((img.get("srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
-
-    # všechny vnořené source
     for s in node.select("source"):
         best = pick_best_srcset((s.get("srcset") or "").strip())
         if best:
             urls.append(abs_url(base_url, best))
-
     return urls
-
 
 def is_missing_image(u: str) -> bool:
     return "Missing_Image_Servo_Skull" in u or "missing_image" in u.lower()
 
 
 def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
-    out = []
-
+    out: List[str] = []
     for u in urls:
-        if not u:
+        if not u or is_missing_image(u):
             continue
+        try:
+            p = urlparse(u)
+            path = p.path or ""
+        except Exception:
+            path = u
 
-        low = u.lower()
-
-        if "missing_image" in low or "missing_image_servo_skull" in low:
+        if "/app/resources/catalog/product/" not in path:
             continue
-
-        if "/app/resources/catalog/product/" not in low and "/catalog/product/" not in low:
-            continue
-
-        if not keep_360 and "/threesixty/" in low:
+        if (not keep_360) and ("/threeSixty/" in path):
             continue
 
         out.append(u)
-
     return out
 
 
@@ -898,7 +874,7 @@ def ensure_query_defaults(url: str, default_q: str) -> str:
     except Exception:
         return url
     
-def scrape_gw_images_robust(
+def scrape_gw_images_stable(
     gw_url: str,
     html: str,
     max_images: int = 20,
@@ -907,55 +883,42 @@ def scrape_gw_images_robust(
     ensure_query_default: str = "fm=webp&w=1200&h=1237",
 ) -> List[str]:
     soup = BeautifulSoup(html, "lxml")
-    urls: List[str] = []
+    expected = expected_count_from_html(html)
 
-    # A) celý dokument - img/src
-    for img in soup.select("img[src]"):
-        src = (img.get("src") or "").strip()
-        if src:
-            urls.append(abs_url(gw_url, src))
+    base = extract_imgs_from_node(soup, gw_url)
+    base = filter_gw_product_images(base, keep_360=keep_360)
+    base = dedupe_by_filename(uniq_keep_order(base))
 
-    # B) celý dokument - img/srcset
-    for img in soup.select("img[srcset]"):
-        best = pick_best_srcset((img.get("srcset") or "").strip())
-        if best:
-            urls.append(abs_url(gw_url, best))
+    need_fallback = has_full_gallery_button(soup) or (expected is not None and expected > len(base))
 
-    # C) celý dokument - source/srcset
-    for source in soup.select("source[srcset]"):
-        best = pick_best_srcset((source.get("srcset") or "").strip())
-        if best:
-            urls.append(abs_url(gw_url, best))
+    if need_fallback:
+        modal_imgs: List[str] = []
+        for n in soup.select('[data-testid="gallery-modal-image"]'):
+            modal_imgs.extend(extract_imgs_from_node(n, gw_url))
 
-    # D) regex fallback přes raw HTML
-    patterns = [
-        r'''src=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
-        r'''srcset=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
-        r'''src=["']([^"']*?/catalog/product/[^"']+)["']''',
-        r'''srcset=["']([^"']*?/catalog/product/[^"']+)["']''',
-    ]
+        if not modal_imgs:
+            container = soup.select_one('[data-testid="container-gallery-modal"]')
+            if container:
+                modal_imgs.extend(extract_imgs_from_node(container, gw_url))
 
-    for pat in patterns:
-        matches = re.findall(pat, html, flags=re.I)
-        for match in matches:
-            candidate = match.strip()
+        modal_imgs = filter_gw_product_images(modal_imgs, keep_360=keep_360)
+        modal_imgs = dedupe_by_filename(uniq_keep_order(modal_imgs))
 
-            if "," in candidate:
-                for part in candidate.split(","):
-                    url_part = part.strip().split(" ")[0].strip()
-                    if url_part:
-                        urls.append(abs_url(gw_url, url_part))
-            else:
-                urls.append(abs_url(gw_url, candidate))
+        merged = modal_imgs[:] if modal_imgs else []
+        if len(merged) < len(base):
+            merged = dedupe_by_filename(uniq_keep_order(merged + base))
+    else:
+        merged = base
 
-    urls = filter_gw_product_images(urls, keep_360=keep_360)
-    urls = uniq_keep_order(urls)
-    urls = dedupe_by_filename(urls)
+    if expected is not None and expected > 0 and len(merged) > expected:
+        merged = merged[:expected]
+
+    merged = merged[:max_images]
 
     if ensure_query:
-        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
+        merged = [ensure_query_defaults(u, ensure_query_default) for u in merged]
 
-    return urls[:max_images]
+    return merged
 
 def scrape_gw_images_fallback_regex(
     gw_url: str,
@@ -1250,45 +1213,20 @@ def run_scraper(
                 gw_price, gw_currency = gw_extract_price(gw_html)
                 faction = detect_faction_from_gw_html(gw_html, _system)
 
-                scrape_gw_images_robust(
+                images = scrape_gw_images_stable(
                     gw_final,
                     gw_html,
                     max_images=max_images,
                     keep_360=bool(keep_360),
                     ensure_query=bool(images_ensure_query),
                 )
+
                 if verbose:
                     print("----- IMAGE SCRAPE DEBUG -----")
-                    print("stable images:", len(images))
+                    print("images:", len(images))
                     for u in images[:10]:
-                        print(" stable:", u)
+                        print(" img:", u)
                     print("------------------------------")
-
-                if not images:
-                    log("GW stable image scrape returned 0 images, trying regex fallback...", verbose)
-                    images = scrape_gw_images_fallback_regex(
-                        gw_final,
-                        gw_html,
-                        max_images=max_images,
-                        keep_360=bool(keep_360),
-                        ensure_query=bool(images_ensure_query),
-                    )
-
-                    if verbose:
-                        print("----- REGEX FALLBACK DEBUG -----")
-                        print("regex images:", len(images))
-                        for u in images[:10]:
-                            print(" regex:", u)
-                        print("--------------------------------")
-
-                images = keep_real_product_images(images)
-
-                if verbose:
-                    print("----- AFTER keep_real_product_images -----")
-                    print("final images:", len(images))
-                    for u in images[:10]:
-                        print(" final:", u)
-                    print("------------------------------------------")
 
             except Exception as e:
                 log(f"GW ERROR: {e}", verbose)
@@ -1296,7 +1234,6 @@ def run_scraper(
                 gw_price = None
                 gw_currency = None
                 faction = ""
-
         if only_first_image and images:
             images = [images[0]]
 
