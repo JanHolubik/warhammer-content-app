@@ -9,7 +9,6 @@ from docx import Document
 
 from filler_core import run_filler
 from scraper_core import run_scraper
-from mig_page import render_mig_page
 from novinky_page import render_novinky_page
 
 PROMPT_TEMPLATE_DIR = Path("prompt_templates")
@@ -111,12 +110,6 @@ if st.session_state["selected_engine"] is None:
             st.session_state["selected_engine"] = "warhammer"
             st.rerun()
 
-    with col2:
-        st.subheader("MIG AMMO")
-        st.write("Tvorba karet, promptů a CSV pro barvy a příslušenství.")
-        if st.button("Otevřít MIG AMMO", use_container_width=True, key="open_mig"):
-            st.session_state["selected_engine"] = "mig"
-            st.rerun()
 
 
 # =========================
@@ -628,12 +621,4 @@ nazev_produktu:
 
     with tab4:
         render_novinky_page()
-# =========================
-# MIG APP
-# =========================
-if st.session_state["selected_engine"] == "mig":
-    if st.button("← Zpět", key="back_from_mig"):
-        st.session_state["selected_engine"] = None
-        st.rerun()
 
-    render_mig_page()
