@@ -1,3 +1,4 @@
+from typing import Dict, Optional
 from gw_browser_client import fetch_gw_product_browser
 
 
