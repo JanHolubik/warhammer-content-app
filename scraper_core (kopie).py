@@ -8,13 +8,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
-import pandas as pd
 import requests
+import pandas as pd
 from bs4 import BeautifulSoup
 from docx import Document
-
 from gw_browser_client import fetch_gw_product_browser
 
 
@@ -74,6 +73,27 @@ BASE_HEADERS = {
     "Accept-Language": "cs-CZ,cs;q=0.9,en;q=0.8",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
+}
+
+GW_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
 }
 
 FX_RATES = {
@@ -151,7 +171,6 @@ def load_links_raw(path: str) -> pd.DataFrame:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-
                 low = line.lower().replace(" ", "")
                 if low.startswith("hp_url") and ("gw_url" in low):
                     continue
@@ -162,7 +181,6 @@ def load_links_raw(path: str) -> pd.DataFrame:
 
                 hp = parts[0]
                 gw = parts[1] if len(parts) > 1 else ""
-
                 if not hp.startswith("http"):
                     continue
                 if gw and not gw.startswith("http"):
@@ -172,7 +190,6 @@ def load_links_raw(path: str) -> pd.DataFrame:
 
         if not rows:
             raise ValueError("TXT soubor je prázdný nebo neobsahuje validní URL řádky.")
-
         return pd.DataFrame(rows, columns=["hp_url", "gw_url"]).fillna("")
 
     last_err = None
@@ -193,7 +210,6 @@ def sanitize_links_df(df: pd.DataFrame) -> pd.DataFrame:
 
     if "hp_url" not in df.columns and len(df.columns) >= 1:
         df = df.rename(columns={df.columns[0]: "hp_url"})
-
     if "gw_url" not in df.columns:
         if len(df.columns) >= 2:
             df = df.rename(columns={df.columns[1]: "gw_url"})
@@ -208,7 +224,6 @@ def sanitize_links_df(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[~df["gw_url"].str.startswith("http"), "gw_url"] = ""
 
     df = df.reset_index(drop=True)
-
     if df.empty:
         raise ValueError("Po vyčištění nezbyl žádný validní řádek s hp_url.")
 
@@ -226,7 +241,7 @@ def fetch_html(
     url: str,
     timeout: int = 30,
     referer: str = "",
-    headers: Optional[Dict[str, str]] = None,
+    headers: Optional[Dict[str, str]] = None
 ) -> Tuple[str, str]:
     hdrs = dict(headers or BASE_HEADERS)
 
@@ -234,6 +249,7 @@ def fetch_html(
         hdrs["Referer"] = referer
 
     session = requests.Session()
+
     r = session.get(
         url,
         headers=hdrs,
@@ -242,6 +258,91 @@ def fetch_html(
     )
     r.raise_for_status()
     return (r.text or ""), str(r.url)
+
+
+def strip_query_and_fragment(url: str) -> str:
+    p = urlparse(url)
+    return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
+
+
+def looks_like_gw_product_html(html: str) -> bool:
+    if not html:
+        return False
+    markers = [
+        'data-testid="hero-product-card-price"',
+        'data-testid="quantity-and-price-container"',
+        'data-testid="gallery-modal-image"',
+        'data-testid="button-gallery-view-full"',
+        'data-testid="image-carousel-image-button"',
+        'data-testid="gallery-image-button"',
+        'data-testid="image-gallery"',
+        "/app/resources/catalog/product/",
+        "Missing_Image_Servo_Skull",
+    ]
+    low = html.lower()
+    return any(m.lower() in low for m in markers)
+
+
+def fetch_gw_html(url: str, timeout: int = 30, verbose: bool = False) -> Tuple[str, str]:
+    candidates: List[str] = []
+    if url:
+        candidates.append(url)
+
+        stripped = strip_query_and_fragment(url)
+        if stripped != url:
+            candidates.append(stripped)
+
+        deduped = []
+        seen = set()
+        for u in candidates:
+            if u not in seen:
+                deduped.append(u)
+                seen.add(u)
+        candidates = deduped
+
+    last_html = ""
+    last_final = url
+    last_err: Optional[Exception] = None
+
+    for candidate in candidates:
+        try:
+            html, final_url = fetch_html(
+                candidate,
+                timeout=timeout,
+                referer="https://www.warhammer.com/",
+                headers=GW_HEADERS,
+            )
+            last_html, last_final = html, final_url
+
+            if looks_like_gw_product_html(html):
+                if verbose:
+                    print(f"GW candidate OK: {candidate}")
+                    print(f"GW final URL: {final_url}")
+                    print(f"GW HTML length: {len(html)}")
+                    print('has hero price:', 'data-testid="hero-product-card-price"' in html)
+                    print('has quantity price:', 'data-testid="quantity-and-price-container"' in html)
+                    print('has product path:', '/app/resources/catalog/product/' in html)
+
+                with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
+                    f.write(html)
+
+                return html, final_url
+
+            log(f"GW fallback candidate loaded but markers missing: {candidate}", verbose)
+
+        except Exception as e:
+            last_err = e
+            log(f"GW fetch failed for {candidate}: {e}", verbose)
+
+    if last_html:
+        with open("DEBUG_GW.html", "w", encoding="utf-8") as f:
+            f.write(last_html)
+        return last_html, last_final
+
+    if last_err:
+        raise last_err
+
+    return "", url
 
 
 def norm_ws(s: str) -> str:
@@ -257,7 +358,6 @@ def clean_title(title: str) -> str:
 def to_float_price(txt: str) -> Optional[float]:
     if not txt:
         return None
-
     t = txt.replace("\xa0", " ")
     t = re.sub(r"[^\d,\. ]", "", t)
     t = t.replace(" ", "")
@@ -286,16 +386,13 @@ def price_without_vat(price_with_vat: float, vat_percent: float) -> float:
 def load_docx_raw_text(docx_path: str) -> str:
     doc = Document(docx_path)
     parts: List[str] = []
-
     for p in doc.paragraphs:
         parts.append(p.text)
-
     for t in doc.tables:
         for row in t.rows:
             for cell in row.cells:
                 if cell.text:
                     parts.append(cell.text)
-
     return "\n".join([x for x in parts if x is not None])
 
 
@@ -315,14 +412,11 @@ def slugify_filename(s: str, max_len: int = 120) -> str:
     s = norm_ws(s)
     if not s:
         return "produkt"
-
     s = s.replace("/", " ").replace("\\", " ").replace(":", " ").replace("|", " ")
     s = re.sub(r"[^\w\-. ]+", "", s, flags=re.UNICODE)
     s = re.sub(r"\s+", "_", s).strip("_")
-
     if not s:
         s = "produkt"
-
     return s[:max_len]
 
 
@@ -341,14 +435,17 @@ def fmt_cz_money(v: Optional[float], decimals: int = 2) -> str:
         return "-"
     return f"{v:.{decimals}f}".replace(".", ",")
 
-
 def is_valid_product_code(value: str) -> bool:
     v = norm_ws(value)
 
     if not v:
         return False
+
+    # moc krátké nesmysly typu "ze"
     if len(v) < 5:
         return False
+
+    # čistě písmena bez čísel/hyfenů bývají často špatně
     if re.fullmatch(r"[a-zA-Z]+", v):
         return False
 
@@ -367,21 +464,6 @@ def generate_fallback_code_from_url(hp_url: str, gw_url: str = "") -> str:
         slug = "produkt"
 
     return f"wh-{slug}"
-
-
-def ensure_query_defaults(url: str, default_q: str) -> str:
-    if not url:
-        return url
-
-    try:
-        p = urlparse(url)
-        if p.query:
-            return url
-        if default_q.startswith("?"):
-            default_q = default_q[1:]
-        return urlunparse((p.scheme, p.netloc, p.path, p.params, default_q, p.fragment))
-    except Exception:
-        return url
 
 
 # =========================
@@ -445,14 +527,12 @@ def hp_extract_price(soup: BeautifulSoup) -> Optional[float]:
         ".price-final",
         ".product-price",
     ]
-
     for sel in selectors:
         el = soup.select_one(sel)
         if el:
             p = to_float_price(el.get_text(" "))
             if p is not None:
                 return p
-
     txt = soup.get_text("\n")
     m = re.search(r"(\d[\d\s\.\,]+)\s*Kč", txt)
     return to_float_price(m.group(0)) if m else None
@@ -470,11 +550,9 @@ def hp_extract_breadcrumbs_list(soup: BeautifulSoup) -> List[str]:
         t = norm_ws(sp.get_text(" "))
         if not t:
             continue
-
         low = t.lower()
         if low in ("domů", "home", "herní prostor", "games workshop"):
             continue
-
         items.append(t)
 
     out, seen = [], set()
@@ -483,7 +561,6 @@ def hp_extract_breadcrumbs_list(soup: BeautifulSoup) -> List[str]:
             continue
         seen.add(x)
         out.append(x)
-
     return out
 
 
@@ -519,7 +596,6 @@ def hp_pick_system(soup: BeautifulSoup) -> str:
 
 def hp_extract_ean(soup: BeautifulSoup) -> str:
     txt = soup.get_text("\n")
-
     m = re.search(r"\bEAN\b[^\d]*(\d{8,14})\b", txt, flags=re.IGNORECASE)
     if m:
         return m.group(1)
@@ -530,11 +606,9 @@ def hp_extract_ean(soup: BeautifulSoup) -> str:
 
     for script in soup.select("script[type='application/ld+json']"):
         txt_json = script.get_text(" ", strip=True)
-
         m3 = re.search(r'"gtin13"\s*:\s*"(\d{13})"', txt_json, flags=re.I)
         if m3:
             return m3.group(1)
-
         m4 = re.search(r'"gtin"\s*:\s*"(\d{8,14})"', txt_json, flags=re.I)
         if m4:
             return m4.group(1)
@@ -552,7 +626,7 @@ def hp_extract_external_code(soup: BeautifulSoup) -> str:
     m2 = re.search(
         r"(Kód|Code|Produktové číslo|Číslo produktu|SKU)[^A-Za-z0-9]{0,10}([A-Za-z0-9][A-Za-z0-9\-\/]{4,})",
         txt,
-        flags=re.IGNORECASE,
+        flags=re.IGNORECASE
     )
     if m2:
         candidate = m2.group(2).strip()
@@ -590,9 +664,6 @@ def build_name_from_h1(h1: str, system: str = "", faction: str = "") -> str:
     return h1
 
 
-# =========================
-# GW PARSE HELPERS
-# =========================
 def extract_relevant_gw_faction_text(gw_html: str) -> str:
     if not gw_html:
         return ""
@@ -639,7 +710,8 @@ def detect_faction_from_gw_html(gw_html: str, system: str = "") -> str:
     for faction in faction_list:
         aliases = FACTION_ALIASES.get(faction, [faction.lower()])
         for alias in aliases:
-            if alias.lower() in text_low:
+            alias_low = alias.lower()
+            if alias_low in text_low:
                 matches.append(faction)
                 break
 
@@ -650,11 +722,16 @@ def detect_faction_from_gw_html(gw_html: str, system: str = "") -> str:
     return matches[0]
 
 
+# =========================
+# GW PRICE
+# =========================
+
 def gw_extract_price(gw_html: str) -> Tuple[Optional[float], Optional[str]]:
     if not gw_html:
         return None, None
 
     soup = BeautifulSoup(gw_html, "lxml")
+
     selectors = [
         '[data-testid="hero-product-card-price"]',
         '[data-testid="quantity-and-price-container"]',
@@ -674,9 +751,228 @@ def gw_extract_price(gw_html: str) -> Tuple[Optional[float], Optional[str]]:
 
     return None, None
 
+# =========================
+# GW IMAGE SCRAPE
+# =========================
+def abs_url(base: str, u: str) -> str:
+    return urljoin(base, u)
+
+
+def strip_query(u: str) -> str:
+    try:
+        p = urlparse(u)
+        return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
+    except Exception:
+        return u
+
+
+def filename_key(u: str) -> str:
+    u2 = strip_query(u)
+    return Path(urlparse(u2).path).name.lower()
+
+
+def pick_best_srcset(srcset: str) -> Optional[str]:
+    if not srcset:
+        return None
+    parts = []
+    for p in srcset.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        parts.append(p.split(" ")[0].strip())
+    return parts[-1] if parts else None
+
+
+def extract_imgs_from_node(node: BeautifulSoup, base_url: str) -> List[str]:
+    urls: List[str] = []
+    for img in node.select("img"):
+        src = (img.get("src") or "").strip()
+        if src:
+            urls.append(abs_url(base_url, src))
+        best = pick_best_srcset((img.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(base_url, best))
+    for s in node.select("source"):
+        best = pick_best_srcset((s.get("srcset") or "").strip())
+        if best:
+            urls.append(abs_url(base_url, best))
+    return urls
+
+def is_missing_image(u: str) -> bool:
+    return "Missing_Image_Servo_Skull" in u or "missing_image" in u.lower()
+
+
+def filter_gw_product_images(urls: List[str], keep_360: bool) -> List[str]:
+    out: List[str] = []
+    for u in urls:
+        if not u or is_missing_image(u):
+            continue
+        try:
+            p = urlparse(u)
+            path = p.path or ""
+        except Exception:
+            path = u
+
+        if "/app/resources/catalog/product/" not in path:
+            continue
+        if (not keep_360) and ("/threeSixty/" in path):
+            continue
+
+        out.append(u)
+    return out
+
+
+def uniq_keep_order(seq: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for x in seq:
+        if x and x not in seen:
+            out.append(x)
+            seen.add(x)
+    return out
+
+
+def dedupe_by_filename(urls: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for u in urls:
+        key = filename_key(u)
+        if key and key not in seen:
+            out.append(u)
+            seen.add(key)
+    return out
+
+
+def expected_count_from_html(html: str) -> Optional[int]:
+    m = re.findall(r"image\s+\d+\s+of\s+(\d+)", html, flags=re.I)
+    nums = []
+    for x in m:
+        try:
+            nums.append(int(x))
+        except Exception:
+            pass
+    return max(nums) if nums else None
+
+
+def has_full_gallery_button(soup: BeautifulSoup) -> bool:
+    return (
+        soup.select_one("#gallery-view-full") is not None
+        or soup.select_one('[data-testid="button-gallery-view-full"]') is not None
+        or soup.select_one('[data-testid="button-gallery-view-full"] p') is not None
+    )
+
+
+def ensure_query_defaults(url: str, default_q: str) -> str:
+    if not url:
+        return url
+    try:
+        p = urlparse(url)
+        if p.query:
+            return url
+        if default_q.startswith("?"):
+            default_q = default_q[1:]
+        return urlunparse((p.scheme, p.netloc, p.path, p.params, default_q, p.fragment))
+    except Exception:
+        return url
+    
+def scrape_gw_images_stable(
+    gw_url: str,
+    html: str,
+    max_images: int = 20,
+    keep_360: bool = False,
+    ensure_query: bool = False,
+    ensure_query_default: str = "fm=webp&w=1200&h=1237",
+) -> List[str]:
+    soup = BeautifulSoup(html, "lxml")
+    expected = expected_count_from_html(html)
+
+    base = extract_imgs_from_node(soup, gw_url)
+    base = filter_gw_product_images(base, keep_360=keep_360)
+    base = dedupe_by_filename(uniq_keep_order(base))
+
+    need_fallback = has_full_gallery_button(soup) or (expected is not None and expected > len(base))
+
+    if need_fallback:
+        modal_imgs: List[str] = []
+        for n in soup.select('[data-testid="gallery-modal-image"]'):
+            modal_imgs.extend(extract_imgs_from_node(n, gw_url))
+
+        if not modal_imgs:
+            container = soup.select_one('[data-testid="container-gallery-modal"]')
+            if container:
+                modal_imgs.extend(extract_imgs_from_node(container, gw_url))
+
+        modal_imgs = filter_gw_product_images(modal_imgs, keep_360=keep_360)
+        modal_imgs = dedupe_by_filename(uniq_keep_order(modal_imgs))
+
+        merged = modal_imgs[:] if modal_imgs else []
+        if len(merged) < len(base):
+            merged = dedupe_by_filename(uniq_keep_order(merged + base))
+    else:
+        merged = base
+
+    if expected is not None and expected > 0 and len(merged) > expected:
+        merged = merged[:expected]
+
+    merged = merged[:max_images]
+
+    if ensure_query:
+        merged = [ensure_query_defaults(u, ensure_query_default) for u in merged]
+
+    return merged
+
+def scrape_gw_images_fallback_regex(
+    gw_url: str,
+    html: str,
+    max_images: int = 20,
+    keep_360: bool = False,
+    ensure_query: bool = False,
+    ensure_query_default: str = "fm=webp&w=1200&h=1237",
+) -> List[str]:
+    urls: List[str] = []
+
+    if not html:
+        return urls
+
+    patterns = [
+        r'''srcset=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/app/resources/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/resources/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/resources/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/media/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/media/catalog/product/[^"']+)["']''',
+        r'''srcset=["']([^"']*?/catalog/product/[^"']+)["']''',
+        r'''src=["']([^"']*?/catalog/product/[^"']+)["']''',
+    ]
+    
+
+    for pat in patterns:
+        matches = re.findall(pat, html, flags=re.I)
+        for match in matches:
+            candidate = match.strip()
+
+            if "," in candidate:
+                parts = [x.strip() for x in candidate.split(",") if x.strip()]
+                for part in parts:
+                    url_part = part.split(" ")[0].strip()
+                    if url_part:
+                        urls.append(abs_url(gw_url, url_part))
+            else:
+                urls.append(abs_url(gw_url, candidate))
+
+    urls = filter_gw_product_images(urls, keep_360=keep_360)
+    urls = uniq_keep_order(urls)
+    urls = dedupe_by_filename(urls)
+    urls = keep_real_product_images(urls)
+
+    if ensure_query:
+        urls = [ensure_query_defaults(u, ensure_query_default) for u in urls]
+
+    return urls[:max_images]
 
 def keep_real_product_images(images: List[str]) -> List[str]:
     out: List[str] = []
+
     bad_markers = [
         "aeronautica_imperialis",
         "landscape",
@@ -697,49 +993,18 @@ def keep_real_product_images(images: List[str]) -> List[str]:
             or "/media/catalog/product/" in low
             or "/resources/catalog/product/" in low
         )
+
         if looks_product_like:
             out.append(u)
 
     return out if out else images
 
 
-def uniq_keep_order(seq: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in seq:
-        if x and x not in seen:
-            out.append(x)
-            seen.add(x)
-    return out
-
-
-def strip_query(u: str) -> str:
-    try:
-        p = urlparse(u)
-        return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
-    except Exception:
-        return u
-
-
-def filename_key(u: str) -> str:
-    u2 = strip_query(u)
-    return Path(urlparse(u2).path).name.lower()
-
-
-def dedupe_by_filename(urls: List[str]) -> List[str]:
-    seen = set()
-    out = []
-
-    for u in urls:
-        key = filename_key(u)
-        if key and key not in seen:
-            out.append(u)
-            seen.add(key)
-
-    return out
-
-
 def extract_code_from_images(images: List[str]) -> str:
+    """
+    Pokusí se vytáhnout produktový kód z GW obrázků.
+    Např. 99120206012_SkavenHellPitAbomination...
+    """
     for u in images:
         m = re.search(r"/(\d{8,14})_[^/]+(?:\.jpg|\.jpeg|\.png|\.webp|\.avif)", u, flags=re.I)
         if m:
@@ -902,11 +1167,7 @@ def run_scraper(
         hp_url = str(r["hp_url"]).strip()
         gw_url = str(r["gw_url"]).strip()
 
-        hp_html, _hp_final = fetch_html(
-            hp_url,
-            referer="https://www.herniprostor.cz/",
-            headers=BASE_HEADERS,
-        )
+        hp_html, _hp_final = fetch_html(hp_url, referer="https://www.herniprostor.cz/", headers=BASE_HEADERS)
         hp_soup = BeautifulSoup(hp_html, "html.parser")
 
         h1_raw = hp_extract_h1(hp_soup)
@@ -929,6 +1190,7 @@ def run_scraper(
         short_cs = short_tpl.cs
         short_en = short_tpl.en
         short_sk = short_tpl.sk
+
         detail_cs = detail_tpl.cs
         detail_en = detail_tpl.en
         detail_sk = detail_tpl.sk
@@ -945,40 +1207,24 @@ def run_scraper(
         gw_price: Optional[float] = None
         gw_currency: Optional[str] = None
         gw_final = gw_url
-        gw_html = ""
 
         if gw_url:
             try:
-                gw_data = fetch_gw_product_browser(
-                    gw_url,
-                    keep_360=bool(keep_360),
-                    debug=verbose,
-                )
-
-                gw_html = str(gw_data.get("html", "") or "")
-                gw_final = str(gw_data.get("final_url", gw_url) or gw_url)
-                gw_price = gw_data.get("price_value")
-                gw_currency = gw_data.get("price_currency")
-                images = list(gw_data.get("images", []) or [])
-
-                if gw_price is None or gw_currency is None:
-                    gw_price, gw_currency = gw_extract_price(gw_html)
-
+                gw_html, gw_final = fetch_gw_html(gw_url, verbose=verbose)
+                gw_price, gw_currency = gw_extract_price(gw_html)
                 faction = detect_faction_from_gw_html(gw_html, _system)
 
-                images = keep_real_product_images(images)
-                images = dedupe_by_filename(uniq_keep_order(images))
-                images = images[:max_images]
-
-                if images_ensure_query:
-                    images = [
-                        ensure_query_defaults(u, "fm=webp&w=1200&h=1237")
-                        for u in images
-                    ]
+                images = scrape_gw_images_stable(
+                    gw_final,
+                    gw_html,
+                    max_images=max_images,
+                    keep_360=bool(keep_360),
+                    ensure_query=bool(images_ensure_query),
+                )
 
                 if verbose:
                     print("----- IMAGE SCRAPE DEBUG -----")
-                    print("browser images:", len(images))
+                    print("images:", len(images))
                     for u in images[:10]:
                         print(" img:", u)
                     print("------------------------------")
@@ -989,7 +1235,6 @@ def run_scraper(
                 gw_price = None
                 gw_currency = None
                 faction = ""
-
         if only_first_image and images:
             images = [images[0]]
 
@@ -1015,15 +1260,11 @@ def run_scraper(
         xml_feed_name = make_xml_feed_name_from_name(name_final)
         seo_title = make_seo_title_from_name(name_final)
 
-        std_price = (
-            round(gw_price * FX_RATES[gw_currency], 2)
-            if (gw_price is not None and gw_currency in FX_RATES)
-            else None
-        )
+        std_price = round(gw_price * FX_RATES[gw_currency], 2) if (gw_price is not None and gw_currency in FX_RATES) else None
 
         if verbose:
             debug_block = f"""----- KONTROLA DAT -----
-Raw název z HP: {h1}
+Raw název z GW: {h1}
 Finální název: {name_final}
 Systém: {_system}
 Frakce: {faction or '-'}

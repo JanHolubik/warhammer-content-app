@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import streamlit as st
 from gw_novinky_core import build_novinka_from_gw
 
@@ -42,9 +43,10 @@ def render_novinky_page():
     )
 
     custom_code = st.text_input(
-    "Vlastní CODE (volitelné)",
-    help="Pokud vyplníš, přepíše automaticky generovaný kód produktu"
-)
+        "Vlastní CODE (volitelné)",
+        help="Pokud vyplníš, přepíše automaticky generovaný kód produktu",
+        key="novinky_custom_code",
+    )
 
     sale_price_mode = st.radio(
         "Prodejní cena",
@@ -64,16 +66,33 @@ def render_novinky_page():
             key="novinky_manual_price",
         )
 
-    keep_360 = st.checkbox("Zahrnout 360 obrázky", value=False, key="novinky_keep_360")
-    only_first_image = st.checkbox("Pouze první obrázek", value=False, key="novinky_only_first_image")
+    keep_360 = st.checkbox(
+        "Zahrnout 360 obrázky",
+        value=False,
+        key="novinky_keep_360",
+    )
+
+    only_first_image = st.checkbox(
+        "Pouze první obrázek",
+        value=False,
+        key="novinky_only_first_image",
+    )
 
     col_a, col_b = st.columns(2)
 
     with col_a:
-        load_clicked = st.button("Načíst z GW", key="novinky_load_btn", use_container_width=True)
+        load_clicked = st.button(
+            "Načíst z GW",
+            key="novinky_load_btn",
+            width="stretch",
+        )
 
     with col_b:
-        if st.button("Vymazat výstup", key="novinky_clear_btn", use_container_width=True):
+        if st.button(
+            "Vymazat výstup",
+            key="novinky_clear_btn",
+            width="stretch",
+        ):
             st.session_state["novinky_result"] = None
             st.rerun()
 
@@ -92,6 +111,7 @@ def render_novinky_page():
 
                 st.session_state["novinky_result"] = result
                 st.success("Novinka byla načtena.")
+
             except Exception as e:
                 st.error(f"Chyba při načítání GW produktu: {e}")
                 st.exception(e)
@@ -122,13 +142,15 @@ def render_novinky_page():
         create_csv_bytes = result["create_df"].to_csv(
             sep=";",
             index=False,
-            encoding="utf-8-sig"
+            encoding="utf-8-sig",
+            quoting=csv.QUOTE_ALL,
         ).encode("utf-8-sig")
 
         source_csv_bytes = result["source_df"].to_csv(
             sep=";",
             index=False,
-            encoding="utf-8-sig"
+            encoding="utf-8-sig",
+            quoting=csv.QUOTE_ALL,
         ).encode("utf-8-sig")
 
         col1, col2 = st.columns(2)
