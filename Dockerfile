@@ -41,11 +41,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt /app/requirements.txt
 RUN python -m pip install --upgrade pip
 RUN pip install -r requirements.txt
-
 RUN python -m playwright install chromium
 
 COPY . /app
 
-EXPOSE 8501
+EXPOSE 8080
 
-CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+CMD ["streamlit", "run", "app.py", "--server.port", "8080", "--server.address", "0.0.0.0"]
