@@ -3,7 +3,8 @@ nixPkgs = ["python312"]
 
 [phases.install]
 cmds = [
-  "python3 -m ensurepip --upgrade",
-  "python3 -m pip install -r requirements.txt",
-  "python3 -m playwright install chromium"
+  "python3 -m venv /app/.venv",
+  "/app/.venv/bin/python -m pip install --upgrade pip",
+  "/app/.venv/bin/python -m pip install -r requirements.txt",
+  "/app/.venv/bin/python -m playwright install chromium"
 ]
