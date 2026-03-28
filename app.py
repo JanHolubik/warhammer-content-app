@@ -23,7 +23,7 @@ st.set_page_config(
 )
 
 if "selected_engine" not in st.session_state:
-    st.session_state["selected_engine"] = None
+    st.session_state["selected_engine"] = "warhammer"
 
 if "generated_prompt_text" not in st.session_state:
     st.session_state["generated_prompt_text"] = ""
@@ -94,73 +94,51 @@ def make_docx_bytes(text: str) -> bytes:
     return buffer.getvalue()
 
 
-# =========================
-# LANDING PAGE
-# =========================
-if st.session_state["selected_engine"] is None:
-    st.title("Content Apps")
-    st.write("Vyber, ve které části chceš pracovat.")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Warhammer Content App")
-        st.write("Scraper, prompty a fill workflow pro GW produkty.")
-        if st.button("Otevřít Warhammer", use_container_width=True, key="open_warhammer"):
-            st.session_state["selected_engine"] = "warhammer"
-            st.rerun()
-
-
 
 # =========================
 # WARHAMMER APP
 # =========================
-if st.session_state["selected_engine"] == "warhammer":
-    st.title("Warhammer Content App")
+st.title("Warhammer Content App")
 
-    if st.button("← Zpět", key="back_from_warhammer"):
-        st.session_state["selected_engine"] = None
-        st.rerun()
+tab1, tab2, tab3, tab4 = st.tabs(["Scraper", "Prompt", "Fill", "Novinky"])
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Scraper", "Prompt", "Fill", "Novinky"])
+with tab1:
+    st.header("Scraper")
+    st.subheader("Odkazy k produktům")
+    st.caption("Do prvního sloupce vlož odkaz na produkt z Herního Prostoru, do druhého odpovídající odkaz z Games Workshopu. GW odkaz může zůstat prázdný.")
 
-    with tab1:
-        st.header("Scraper")
-        st.subheader("Odkazy k produktům")
-        st.caption("Do prvního sloupce vlož odkaz na produkt z Herního Prostoru, do druhého odpovídající odkaz z Games Workshopu. GW odkaz může zůstat prázdný.")
+    links_df = pd.DataFrame([
+        {"Herní Prostor URL": "", "Games Workshop URL": ""}
+    ])
 
-        links_df = pd.DataFrame([
-            {"Herní Prostor URL": "", "Games Workshop URL": ""}
-        ])
+    edited_links_df = st.data_editor(
+        links_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="scraper_links_editor",
+    )
 
-        edited_links_df = st.data_editor(
-            links_df,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="scraper_links_editor",
-        )
+    template_dir = TEMPLATE_DIR_DEFAULT
 
-        template_dir = TEMPLATE_DIR_DEFAULT
-
-        split_by_type = st.checkbox(
+    split_by_type = st.checkbox(
             "Split podle typu produktu",
             value=True,
             key="scraper_split_by_type",
         )
 
-        keep_360 = st.checkbox(
+    keep_360 = st.checkbox(
             "Zahrnout 360° obrázky",
             value=False,
             key="scraper_keep_360",
         )
 
-        verbose_mode = st.checkbox(
+    verbose_mode = st.checkbox(
             "Verbose log",
             value=True,
             key="scraper_verbose_mode",
         )
 
-        if st.button("Spustit scraper", key="scraper_run_button"):
+    if st.button("Spustit scraper", key="scraper_run_button"):
             try:
                 valid_links_df = edited_links_df.copy().fillna("")
                 valid_links_df = valid_links_df.rename(columns={
@@ -213,7 +191,7 @@ if st.session_state["selected_engine"] == "warhammer":
             except Exception as e:
                 st.error(f"Chyba při scrapování: {e}")
 
-        if st.session_state["scraper_create_csv_bytes"] is not None:
+    if st.session_state["scraper_create_csv_bytes"] is not None:
             safe_name = re.sub(
                 r"[^a-zA-Z0-9_-]",
                 "_",
